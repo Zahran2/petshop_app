@@ -1,0 +1,29 @@
+# Database - data bisnis (produk, transaksi) tersimpan di sini, jangan ikut
+# di-commit karena ini data lokal, bukan source code
+petshop.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache Python
+__pycache__/
+*.py[cod]
+
+# Virtual environment (kalau nanti dipakai)
+venv/
+env/
+.venv/
+
+# Hasil build .exe (kalau nanti mau di-package pakai PyInstaller)
+build/
+dist/
+*.spec
+
+# Editor
+.vscode/
+.idea/
+
+# File sampah OS
+.DS_Store
+Thumbs.db
+desktop.ini
