@@ -1,7 +1,8 @@
 """Layar Riwayat - lihat riwayat transaksi dan ringkasan penjualan hari ini."""
 
 import customtkinter as ctk
-from tkinter import ttk
+from tkinter import ttk, filedialog, messagebox
+import csv
 import db
 import utils
 
@@ -34,6 +35,9 @@ class RiwayatFrame(ctk.CTkFrame):
 
         # Tombol Refresh digeser ke column 2
         ctk.CTkButton(top, text="🔄 Refresh", width=100, command=self.refresh).grid(row=0, column=2)
+
+        ctk.CTkButton(top, text="⬇️ Export CSV", width=100, fg_color="#27ae60", hover_color="#2ecc71",
+                      command=self.export_csv).grid(row=0, column=3, padx=(10, 0))
 
         self._kolom_headings = {"waktu": "Waktu", "total": "Total", "dibayar": "Dibayar", "kembalian": "Kembalian"}
 
@@ -115,3 +119,30 @@ class RiwayatFrame(ctk.CTkFrame):
                     f"  =  {utils.format_rupiah(d['subtotal'])}\n",
                 )
         self.detail_box.configure(state="disabled")
+
+    def export_csv(self):
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
+            title="Simpan Data Riwayat Transaksi",
+            initialfile=f"Riwayat_Transaksi_{self.filter_waktu_var.get().replace(' ', '_')}.csv"
+        )
+        if not filepath:
+            return
+
+        try:
+            with open(filepath, mode="w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                
+                # Tulis Header
+                headers = [self.tree.heading(col)["text"] for col in self.tree["columns"]]
+                writer.writerow(headers)
+
+                # Tulis Data
+                for row_id in self.tree.get_children():
+                    row_data = self.tree.item(row_id)["values"]
+                    writer.writerow(row_data)
+
+            messagebox.showinfo("Berhasil", f"Data riwayat berhasil diexport ke:\n{filepath}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Gagal menyimpan file:\n{str(e)}")

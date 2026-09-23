@@ -1,7 +1,8 @@
 """Layar Stok - kelola daftar produk (tambah, edit, hapus)."""
 
 import customtkinter as ctk
-from tkinter import messagebox, ttk
+from tkinter import messagebox, ttk, filedialog
+import csv
 import db
 import utils
 
@@ -39,6 +40,9 @@ class StokFrame(ctk.CTkFrame):
                      
         ctk.CTkButton(top, text="+ Tambah Produk", height=36,
                      command=self.form_tambah).grid(row=0, column=3)
+
+        ctk.CTkButton(top, text="⬇️ Export CSV", height=36, fg_color="#27ae60", hover_color="#2ecc71",
+                     command=self.export_csv).grid(row=0, column=4, padx=(10, 0))
         
         self.filter_stok_var = ctk.BooleanVar(value=False)
 
@@ -185,6 +189,34 @@ class StokFrame(ctk.CTkFrame):
                                 "Riwayat transaksi yang sudah ada tidak akan terpengaruh."):
             db.hapus_produk(produk["id"])
             self.refresh_list()
+
+    def export_csv(self):
+        # Minta user memilih lokasi dan nama file
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
+            title="Simpan Data Stok",
+            initialfile="Data_Stok_Petshop.csv"
+        )
+        if not filepath: # Jika user menekan Cancel
+            return
+
+        try:
+            with open(filepath, mode="w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                
+                # 1. Tulis Header (Hapus panah sorting ▲/▼ jika ada)
+                headers = [self.tree.heading(col)["text"].replace(" ▼", "").replace(" ▲", "") for col in self.tree["columns"]]
+                writer.writerow(headers)
+
+                # 2. Tulis Data Baris demi Baris
+                for row_id in self.tree.get_children():
+                    row_data = self.tree.item(row_id)["values"]
+                    writer.writerow(row_data)
+
+            messagebox.showinfo("Berhasil", f"Data stok berhasil diexport ke:\n{filepath}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Gagal menyimpan file:\n{str(e)}")
 
     def _buka_form(self, produk=None):
         win = ctk.CTkToplevel(self)
