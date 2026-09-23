@@ -20,11 +20,22 @@ class KasirFrame(ctk.CTkFrame):
         self.grid_rowconfigure(1, weight=1)
 
         # --- Kolom kiri: pencarian + daftar produk ---
-        search_entry = ctk.CTkEntry(self, placeholder_text="🔍  Cari produk...", height=38)
-        search_entry.grid(row=0, column=0, sticky="ew", padx=(0, 10), pady=(0, 10))
+        search_frame = ctk.CTkFrame(self, fg_color="transparent")
+        search_frame.grid(row=0, column=0, sticky="ew", padx=(0, 10), pady=(0, 10))
+        search_frame.grid_columnconfigure(0, weight=1)
+
         self.search_var = ctk.StringVar()
-        search_entry.configure(textvariable=self.search_var)
         self.search_var.trace_add("write", lambda *a: self.refresh_produk_list())
+        
+        search_entry = ctk.CTkEntry(search_frame, textvariable=self.search_var, placeholder_text="🔍  Cari produk...", height=38)
+        search_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+
+        self.filter_kat_var = ctk.StringVar(value="Semua Kategori")
+        self.filter_kat_combo = ctk.CTkComboBox(
+            search_frame, variable=self.filter_kat_var, width=140, height=38,
+            command=lambda e: self.refresh_produk_list()
+        )
+        self.filter_kat_combo.grid(row=0, column=1)
 
         self.produk_scroll = ctk.CTkScrollableFrame(self, label_text="Daftar Produk")
         self.produk_scroll.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
@@ -73,15 +84,25 @@ class KasirFrame(ctk.CTkFrame):
 
     # ---------- Daftar produk ----------
 
+    def refresh_kategori_filter(self):
+        daftar_kat = db.get_semua_kategori()
+        self.filter_kat_combo.configure(values=["Semua Kategori"] + daftar_kat)
+
     def refresh_produk_list(self):
+        # Selalu pastikan daftar dropdown kategori update dengan data terbaru
+        self.refresh_kategori_filter()
+        
         for widget in self.produk_scroll.winfo_children():
             widget.destroy()
 
         keyword = self.search_var.get()
-        produk_list = db.get_semua_produk(keyword)
+        kategori = self.filter_kat_var.get() # Ambil kategori yang sedang dipilih
+        
+        # Kirim keyword dan kategori ke database
+        produk_list = db.get_semua_produk(keyword, kategori)
 
         if not produk_list:
-            ctk.CTkLabel(self.produk_scroll, text="Belum ada produk. Tambahkan dulu di menu Stok.",
+            ctk.CTkLabel(self.produk_scroll, text="Produk tidak ditemukan.",
                          text_color=("gray50", "gray60")).pack(pady=20)
             return
 
