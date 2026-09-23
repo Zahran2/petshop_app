@@ -76,9 +76,44 @@ class StokFrame(ctk.CTkFrame):
 
     def _apply_treeview_columns(self):
         for col, teks in self._kolom_headings.items():
-            self.tree.heading(col, text=teks)
+            # Tambahkan command agar saat diklik memicu fungsi sorting
+            self.tree.heading(col, text=teks, command=lambda c=col: self._sort_by_kolom(c, False))
             anchor = "e" if col == "harga" else ("center" if col in ("stok", "satuan") else "w")
             self.tree.column(col, width=utils.ukuran(self._kolom_widths[col]), anchor=anchor)
+
+    def _sort_by_kolom(self, col, reverse):
+        # Ambil semua data (nilai dan ID baris) dari Treeview
+        data_list = [(self.tree.set(k, col), k) for k in self.tree.get_children("")]
+        
+        # Fungsi khusus untuk mengonversi tipe data sebelum diurutkan
+        def parse_data(val):
+            if col == "harga":
+                # Ambil hanya angka murninya saja (hapus 'Rp ' dan titik)
+                bersih = "".join(c for c in val if c.isdigit())
+                return int(bersih) if bersih else 0
+            elif col == "stok":
+                return int(val) if val.isdigit() else 0
+            else:
+                # Untuk teks, ubah jadi huruf kecil semua agar sortingnya konsisten (A-Z)
+                return val.lower()
+
+        # Urutkan data berdasarkan konversi tipe datanya
+        data_list.sort(key=lambda t: parse_data(t[0]), reverse=reverse)
+
+        # Geser ulang posisi baris di dalam UI (sangat ringan karena tidak query database)
+        for index, (_, k) in enumerate(data_list):
+            self.tree.move(k, "", index)
+
+        # Update fungsi di judul kolom agar klik berikutnya membalik urutan (Ascending/Descending)
+        self.tree.heading(col, command=lambda c=col: self._sort_by_kolom(c, not reverse))
+        
+        # Tambahkan indikator panah ▲ / ▼ di judul yang sedang diklik (opsional UX)
+        for c, teks in self._kolom_headings.items():
+            if c == col:
+                panah = " ▼" if reverse else " ▲"
+                self.tree.heading(c, text=teks + panah)
+            else:
+                self.tree.heading(c, text=teks)
 
     def refresh_style(self):
         """Dipanggil dari main.py pas skala teks diubah - ttk.Treeview gak

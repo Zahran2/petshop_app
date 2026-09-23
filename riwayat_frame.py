@@ -22,7 +22,18 @@ class RiwayatFrame(ctk.CTkFrame):
 
         self.ringkasan_label = ctk.CTkLabel(top, text="", font=ctk.CTkFont(size=17, weight="bold"))
         self.ringkasan_label.grid(row=0, column=0, sticky="w")
-        ctk.CTkButton(top, text="🔄 Refresh", width=100, command=self.refresh).grid(row=0, column=1)
+        
+        # Tambahkan Dropdown Filter
+        self.filter_waktu_var = ctk.StringVar(value="Hari Ini")
+        pilihan_waktu = ["Hari Ini", "7 Hari Terakhir", "Bulan Ini", "Semua Waktu"]
+        self.filter_waktu_combo = ctk.CTkComboBox(
+            top, values=pilihan_waktu, variable=self.filter_waktu_var, width=150,
+            command=lambda e: self.refresh()
+        )
+        self.filter_waktu_combo.grid(row=0, column=1, padx=(0, 10))
+
+        # Tombol Refresh digeser ke column 2
+        ctk.CTkButton(top, text="🔄 Refresh", width=100, command=self.refresh).grid(row=0, column=2)
 
         self._kolom_headings = {"waktu": "Waktu", "total": "Total", "dibayar": "Dibayar", "kembalian": "Kembalian"}
 
@@ -62,17 +73,34 @@ class RiwayatFrame(ctk.CTkFrame):
     def refresh(self):
         for row in self.tree.get_children():
             self.tree.delete(row)
-        for t in db.get_riwayat_transaksi():
+            
+        # 1. Ambil nilai filter yang dipilih
+        filter_terpilih = self.filter_waktu_var.get()
+        
+        # 2. Ambil data dari database sesuai filter
+        data_transaksi = db.get_riwayat_transaksi(filter_terpilih)
+        
+        # Variabel untuk menghitung total pendapatan
+        total_pendapatan = 0
+        
+        for t in data_transaksi:
+            total_pendapatan += t["total"]
             self.tree.insert(
                 "", "end", iid=str(t["id"]),
                 values=(t["tanggal"], utils.format_rupiah(t["total"]),
                        utils.format_rupiah(t["dibayar"]), utils.format_rupiah(t["kembalian"])),
             )
 
-        ringkasan = db.get_total_penjualan_hari_ini()
+        # 3. Update label ringkasan secara dinamis
         self.ringkasan_label.configure(
-            text=f"Hari ini: {ringkasan['jumlah']} transaksi  •  {utils.format_rupiah(ringkasan['total'])}"
+            text=f"{filter_terpilih}: {len(data_transaksi)} transaksi  •  {utils.format_rupiah(total_pendapatan)}"
         )
+        
+        # 4. Bersihkan detail box agar tidak bingung saat filter diganti
+        self.detail_box.configure(state="normal")
+        self.detail_box.delete("1.0", "end")
+        self.detail_box.insert("1.0", "Klik salah satu transaksi di atas untuk melihat detail item yang terjual.")
+        self.detail_box.configure(state="disabled")
 
     def tampilkan_detail(self, event=None):
         sel = self.tree.selection()

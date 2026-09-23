@@ -6,7 +6,7 @@ database server apa pun.
 
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import utils
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "petshop.db")
@@ -237,9 +237,27 @@ def buat_transaksi(items, dibayar):
     return transaksi_id, total, kembalian
 
 
-def get_riwayat_transaksi():
+def get_riwayat_transaksi(filter_waktu="Semua Waktu"):
     conn = get_connection()
-    rows = conn.execute("SELECT * FROM transaksi ORDER BY id DESC").fetchall()
+    query = "SELECT * FROM transaksi"
+    params = []
+    
+    today = datetime.now()
+    
+    if filter_waktu == "Hari Ini":
+        query += " WHERE tanggal LIKE ?"
+        params.append(f"{today.strftime('%Y-%m-%d')}%")
+    elif filter_waktu == "7 Hari Terakhir":
+        tujuh_hari_lalu = (today - timedelta(days=7)).strftime("%Y-%m-%d")
+        query += " WHERE tanggal >= ?"
+        params.append(tujuh_hari_lalu)
+    elif filter_waktu == "Bulan Ini":
+        query += " WHERE tanggal LIKE ?"
+        params.append(f"{today.strftime('%Y-%m')}%")
+        
+    query += " ORDER BY id DESC"
+    
+    rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
