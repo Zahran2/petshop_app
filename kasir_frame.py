@@ -123,6 +123,12 @@ class KasirFrame(ctk.CTkFrame):
             item["jumlah"] = baru
         self.refresh_cart()
 
+    def hapus_dari_cart(self, item):
+        """Menghapus item secara langsung dari keranjang berapapun jumlahnya."""
+        if item in self.cart:
+            self.cart.remove(item)
+            self.refresh_cart()
+
     def refresh_cart(self):
         for widget in self.cart_scroll.winfo_children():
             widget.destroy()
@@ -148,12 +154,23 @@ class KasirFrame(ctk.CTkFrame):
 
             ctrl = ctk.CTkFrame(row, fg_color="transparent")
             ctrl.pack(fill="x")
+            
+            # Bagian Kiri: Tombol Minus, Angka, Tombol Plus
             ctk.CTkButton(ctrl, text="-", width=26, height=26,
                          command=lambda it=item: self.ubah_jumlah(it, -1)).pack(side="left")
             ctk.CTkLabel(ctrl, text=str(item["jumlah"]), width=30).pack(side="left")
             ctk.CTkButton(ctrl, text="+", width=26, height=26,
                          command=lambda it=item: self.ubah_jumlah(it, 1)).pack(side="left")
-            ctk.CTkLabel(ctrl, text=utils.format_rupiah(subtotal), anchor="e").pack(side="right", padx=4)
+            
+            # Bagian Kanan: Karena pakai side="right", urutan nulisnya dari ujung kanan ke kiri.
+            
+            # 1. Tombol X (paling ujung kanan)
+            ctk.CTkButton(ctrl, text="X", width=26, height=26, 
+                         fg_color="#C0392B", hover_color="#922B21", font=ctk.CTkFont(weight="bold"),
+                         command=lambda it=item: self.hapus_dari_cart(it)).pack(side="right")
+                         
+            # 2. Label Subtotal (di sebelah kiri tombol X)
+            ctk.CTkLabel(ctrl, text=utils.format_rupiah(subtotal), anchor="e").pack(side="right", padx=(0, 10))
 
         self.total_label.configure(text=f"Total: {utils.format_rupiah(total)}")
         self._current_total = total
