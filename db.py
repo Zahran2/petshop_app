@@ -30,9 +30,16 @@ def init_db():
             kategori TEXT DEFAULT '',
             harga_jual REAL NOT NULL,
             stok INTEGER NOT NULL DEFAULT 0,
-            satuan TEXT DEFAULT 'pcs'
+            satuan TEXT DEFAULT 'pcs',
+            gambar TEXT DEFAULT '' 
         )
     """)
+    # Memperbarui database lama dengan kolom baru tanpa menghapus data
+    try:
+        cur.execute("ALTER TABLE produk ADD COLUMN gambar TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        # Jika error (artinya kolom gambar sudah berhasil ditambahkan sebelumnya), abaikan saja
+        pass
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS transaksi (
@@ -78,21 +85,20 @@ def init_db():
 
 # ---------------- PRODUK ----------------
 
-def tambah_produk(nama, kategori, harga_jual, stok, satuan="pcs"):
+def tambah_produk(nama, kategori, harga_jual, stok, satuan="pcs", gambar=""):
     conn = get_connection()
     conn.execute(
-        "INSERT INTO produk (nama, kategori, harga_jual, stok, satuan) VALUES (?, ?, ?, ?, ?)",
-        (nama, kategori, harga_jual, stok, satuan),
+        "INSERT INTO produk (nama, kategori, harga_jual, stok, satuan, gambar) VALUES (?, ?, ?, ?, ?, ?)",
+        (nama, kategori, harga_jual, stok, satuan, gambar),
     )
     conn.commit()
     conn.close()
 
-
-def update_produk(produk_id, nama, kategori, harga_jual, stok, satuan):
+def update_produk(produk_id, nama, kategori, harga_jual, stok, satuan, gambar):
     conn = get_connection()
     conn.execute(
-        "UPDATE produk SET nama=?, kategori=?, harga_jual=?, stok=?, satuan=? WHERE id=?",
-        (nama, kategori, harga_jual, stok, satuan, produk_id),
+        "UPDATE produk SET nama=?, kategori=?, harga_jual=?, stok=?, satuan=?, gambar=? WHERE id=?",
+        (nama, kategori, harga_jual, stok, satuan, gambar, produk_id),
     )
     conn.commit()
     conn.close()

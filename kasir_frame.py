@@ -4,7 +4,8 @@ import customtkinter as ctk
 from tkinter import messagebox
 import db
 import utils
-
+import os
+from PIL import Image
 
 class KasirFrame(ctk.CTkFrame):
     def __init__(self, master):
@@ -109,18 +110,35 @@ class KasirFrame(ctk.CTkFrame):
         for p in produk_list:
             row = ctk.CTkFrame(self.produk_scroll, corner_radius=8)
             row.pack(fill="x", pady=4)
-            row.grid_columnconfigure(0, weight=1)
+            row.grid_columnconfigure(1, weight=1)
+
+            # --- RENDER GAMBAR ---
+            img_path = ""
+            if p.get("gambar"):
+                folder_img = os.path.join(os.path.dirname(os.path.abspath(__file__)), "img_produk")
+                img_path = os.path.join(folder_img, p["gambar"])
+            
+            # Jika gambar ada di folder, tampilkan. Jika tidak, gunakan kotak abu-abu kosong.
+            if img_path and os.path.exists(img_path):
+                pil_img = Image.open(img_path)
+                ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(50, 50))
+                lbl_img = ctk.CTkLabel(row, image=ctk_img, text="")
+            else:
+                lbl_img = ctk.CTkLabel(row, text="🖼️", font=ctk.CTkFont(size=25), width=50, height=50, fg_color="#e0e0e0", corner_radius=6)
+            
+            lbl_img.grid(row=0, column=0, padx=(10, 0), pady=8)
+            # ---------------------
 
             sub = f"{utils.format_rupiah(p['harga_jual'])}  •  stok: {p['stok']} {p['satuan']}"
             text_col = ctk.CTkFrame(row, fg_color="transparent")
-            text_col.grid(row=0, column=0, sticky="ew", padx=12, pady=8)
+            text_col.grid(row=0, column=1, sticky="ew", padx=12, pady=8)
             ctk.CTkLabel(text_col, text=p["nama"], anchor="w", font=ctk.CTkFont(weight="bold")).pack(anchor="w")
             ctk.CTkLabel(text_col, text=sub, anchor="w", text_color=("gray40", "gray65"),
                         font=ctk.CTkFont(size=12)).pack(anchor="w")
 
             add_btn = ctk.CTkButton(row, text="+ Tambah", width=90,
                                       command=lambda prod=p: self.tambah_ke_cart(prod))
-            add_btn.grid(row=0, column=1, padx=12)
+            add_btn.grid(row=0, column=2, padx=12)
             if p["stok"] <= 0:
                 add_btn.configure(state="disabled", text="Stok habis", fg_color="gray")
 

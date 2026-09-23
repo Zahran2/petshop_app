@@ -5,6 +5,9 @@ from tkinter import messagebox, ttk, filedialog
 import csv
 import db
 import utils
+import os
+import shutil
+from PIL import Image
 
 BATAS_STOK_MENIPIS = 5
 
@@ -219,6 +222,9 @@ class StokFrame(ctk.CTkFrame):
             messagebox.showerror("Error", f"Gagal menyimpan file:\n{str(e)}")
 
     def _buka_form(self, produk=None):
+        self.path_gambar_baru = ""
+        nama_gambar_lama = produk["gambar"] if produk and produk.get("gambar") else ""
+
         win = ctk.CTkToplevel(self)
         win.title("Edit Produk" if produk else "Tambah Produk")
         win.resizable(False, True)
@@ -321,6 +327,23 @@ class StokFrame(ctk.CTkFrame):
                 warn.pack(fill="x", padx=25)
                 warnings[key] = warn
 
+        img_frame = ctk.CTkFrame(win, fg_color="transparent")
+        img_frame.pack(fill="x", padx=25, pady=(15, 0))
+        
+        lbl_gambar = ctk.CTkLabel(img_frame, text="Gambar: " + (nama_gambar_lama or "Tidak ada"), text_color="gray")
+        lbl_gambar.pack(side="left")
+
+        def pilih_gambar():
+            filepath = filedialog.askopenfilename(
+                title="Pilih Gambar Produk",
+                filetypes=[("Image Files", "*.png *.jpg *.jpeg")]
+            )
+            if filepath:
+                self.path_gambar_baru = filepath
+                lbl_gambar.configure(text="Gambar: Terpilih (Belum disimpan)", text_color="#27ae60")
+                
+        ctk.CTkButton(img_frame, text="Pilih Gambar", width=100, command=pilih_gambar).pack(side="right")
+
         def cek_nama(event=None):
             warnings["nama"].configure(text="Nama tidak boleh kosong" if not fields["nama"].get().strip() else "")
 
@@ -344,6 +367,23 @@ class StokFrame(ctk.CTkFrame):
             nama = fields["nama"].get().strip()
             kategori = fields["kategori"].get().strip()
             satuan = fields["satuan"].get().strip() or "pcs"
+            
+            # --- PROSES SIMPAN GAMBAR ---
+            nama_file_gambar = nama_gambar_lama
+            if self.path_gambar_baru:
+                # Buat folder img_produk jika belum ada
+                folder_img = os.path.join(os.path.dirname(os.path.abspath(__file__)), "img_produk")
+                os.makedirs(folder_img, exist_ok=True)
+                
+                # Buat nama file baru berbasis waktu
+                ekstensi = os.path.splitext(self.path_gambar_baru)[1]
+                import time
+                nama_file_gambar = f"prod_{int(time.time())}{ekstensi}"
+                
+                # Salin gambar ke folder aplikasi
+                tujuan = os.path.join(folder_img, nama_file_gambar)
+                shutil.copy(self.path_gambar_baru, tujuan)
+            # ----------------------------
 
             if not nama:
                 cek_nama()
@@ -358,10 +398,11 @@ class StokFrame(ctk.CTkFrame):
                 messagebox.showerror("Error", "Harga dan stok tidak boleh kosong")
                 return
 
+            # Perbarui pemanggilan fungsi db untuk menyertakan nama_file_gambar
             if produk:
-                db.update_produk(produk["id"], nama, kategori, harga, stok, satuan)
+                db.update_produk(produk["id"], nama, kategori, harga, stok, satuan, nama_file_gambar)
             else:
-                db.tambah_produk(nama, kategori, harga, stok, satuan)
+                db.tambah_produk(nama, kategori, harga, stok, satuan, nama_file_gambar)
 
             messagebox.showinfo("Tersimpan", f"Produk '{nama}' berhasil disimpan")
             win.destroy()
