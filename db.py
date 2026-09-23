@@ -65,6 +65,13 @@ def init_db():
         )
     """)
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS kategori (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nama TEXT UNIQUE NOT NULL
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -116,6 +123,51 @@ def get_produk_by_id(produk_id):
     row = conn.execute("SELECT * FROM produk WHERE id=?", (produk_id,)).fetchone()
     conn.close()
     return dict(row) if row else None
+
+# ---------------- KATEGORI ----------------
+
+def tambah_kategori(nama):
+    conn = get_connection()
+    try:
+        conn.execute("INSERT INTO kategori (nama) VALUES (?)", (nama,))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        pass  # Abaikan jika nama kategori sudah ada
+    finally:
+        conn.close()
+
+def get_semua_kategori():
+    conn = get_connection()
+    rows = conn.execute("SELECT nama FROM kategori ORDER BY nama").fetchall()
+    conn.close()
+    return [r["nama"] for r in rows]
+
+def update_kategori(kategori_id, nama_baru):
+    conn = get_connection()
+    try:
+        conn.execute("UPDATE kategori SET nama=? WHERE id=?", (nama_baru, kategori_id))
+        
+        # (Opsional tapi disarankan) Update juga nama kategori di tabel produk agar sinkron
+        # Tapi karena ini SQLite sederhana dan kita tak memisahkan id_kategori di tabel produk,
+        # kita hanya biarkan dulu seperti ini.
+        conn.commit()
+    except sqlite3.IntegrityError:
+        pass # Abaikan jika namanya sudah dipakai kategori lain
+    finally:
+        conn.close()
+
+def hapus_kategori(kategori_id):
+    conn = get_connection()
+    conn.execute("DELETE FROM kategori WHERE id=?", (kategori_id,))
+    conn.commit()
+    conn.close()
+
+def get_kategori_lengkap():
+    """Mengembalikan list of dictionary berisi id dan nama kategori."""
+    conn = get_connection()
+    rows = conn.execute("SELECT id, nama FROM kategori ORDER BY nama").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 # ---------------- TRANSAKSI ----------------

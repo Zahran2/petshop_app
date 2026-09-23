@@ -26,8 +26,11 @@ class StokFrame(ctk.CTkFrame):
         self.search_var.trace_add("write", lambda *a: self.refresh_list())
         ctk.CTkEntry(top, placeholder_text="🔍  Cari produk...", height=36,
                     textvariable=self.search_var).grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        ctk.CTkButton(top, text="Kelola Kategori", height=36, fg_color="#636e72", hover_color="#2d3436",
+                     command=self.buka_kelola_kategori).grid(row=0, column=1, padx=(0, 10))
+                     
         ctk.CTkButton(top, text="+ Tambah Produk", height=36,
-                     command=self.form_tambah).grid(row=0, column=1)
+                     command=self.form_tambah).grid(row=0, column=2)
 
         self._kolom_headings = {"nama": "Nama Produk", "kategori": "Kategori", "harga": "Harga Jual",
                                  "stok": "Stok", "satuan": "Satuan"}
@@ -124,6 +127,60 @@ class StokFrame(ctk.CTkFrame):
         warnings = {}
         for key, label, default in labels:
             ctk.CTkLabel(win, text=label, anchor="w").pack(fill="x", padx=25, pady=(14, 2))
+            
+            if key == "kategori":
+                cat_frame = ctk.CTkFrame(win, fg_color="transparent")
+                cat_frame.pack(fill="x", padx=25)
+                
+                # Ambil list kategori dari database
+                list_kategori = db.get_semua_kategori()
+                if not list_kategori:
+                    list_kategori = ["Pilih Kategori..."]
+                
+                # Buat variabel untuk mengontrol teks yang tampil di ComboBox
+                cat_var = ctk.StringVar()
+                if produk and produk.get("kategori"):
+                    cat_var.set(produk["kategori"])
+                else:
+                    cat_var.set(list_kategori[0] if list_kategori else "")
+                
+                # BEDA NAMA VARIABEL: Gunakan kategori_combo agar tidak tertimpa oleh loop field lain
+                kategori_combo = ctk.CTkComboBox(cat_frame, values=list_kategori, variable=cat_var, height=34)
+                kategori_combo.pack(side="left", fill="x", expand=True)
+                
+                # Fungsi memunculkan pop-up tambah kategori baru
+                def aksi_tambah_kategori():
+                    dialog = ctk.CTkInputDialog(text="Nama kategori baru (misal: Dry Food):", title="Tambah Kategori")
+                    kategori_baru = dialog.get_input()
+                    
+                    if kategori_baru and kategori_baru.strip():
+                        bersih = kategori_baru.strip()
+                        
+                        # Simpan ke database
+                        db.tambah_kategori(bersih)
+                        
+                        # Ambil data terbaru
+                        kategori_terbaru = db.get_semua_kategori()
+                        if not kategori_terbaru:
+                            kategori_terbaru = ["Pilih Kategori..."]
+                            
+                        # Update nilai menggunakan kategori_combo (BUKAN entry)
+                        kategori_combo.configure(values=kategori_terbaru)
+                        
+                        # Update teks yang terpilih
+                        cat_var.set(bersih)
+                        kategori_combo.set(bersih)
+                        
+                        # Paksa update tampilan
+                        win.update_idletasks()
+                        
+                btn_plus = ctk.CTkButton(cat_frame, text="+", width=34, height=34, command=aksi_tambah_kategori)
+                btn_plus.pack(side="right", padx=(8, 0))
+                
+                # Simpan kategori_combo ke dict fields, bukan entry
+                fields[key] = kategori_combo
+                continue
+            
             entry = ctk.CTkEntry(win, height=34)
             entry.pack(fill="x", padx=25)
 
@@ -218,3 +275,70 @@ class StokFrame(ctk.CTkFrame):
 
         win.update_idletasks()
         win.geometry(f"380x{win.winfo_reqheight() + 10}")
+
+    def buka_kelola_kategori(self):
+        win = ctk.CTkToplevel(self)
+        win.title("Kelola Kategori")
+        win.geometry("400x500")
+        win.resizable(False, False)
+        win.grab_set()
+
+        ctk.CTkLabel(win, text="Daftar Kategori", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(15, 10))
+
+        # Frame untuk daftar (bisa di-scroll)
+        list_frame = ctk.CTkScrollableFrame(win)
+        list_frame.pack(fill="both", expand=True, padx=20, pady=(0, 15))
+
+        def refresh_kategori_list():
+            # Bersihkan layar sebelum menampilkan data terbaru
+            for widget in list_frame.winfo_children():
+                widget.destroy()
+
+            daftar_kat = db.get_kategori_lengkap()
+            
+            if not daftar_kat:
+                ctk.CTkLabel(list_frame, text="Belum ada kategori", text_color="gray").pack(pady=20)
+                return
+
+            for kat in daftar_kat:
+                row = ctk.CTkFrame(list_frame, fg_color="transparent")
+                row.pack(fill="x", pady=5)
+                
+                # Nama kategori di sebelah kiri
+                ctk.CTkLabel(row, text=kat["nama"], anchor="w", font=ctk.CTkFont(size=14)).pack(side="left", fill="x", expand=True)
+
+                # Tombol Edit (Tengah)
+                ctk.CTkButton(row, text="Edit", width=50, height=28, fg_color="#3498db", hover_color="#2980b9",
+                              command=lambda k=kat: aksi_edit_kategori(k)).pack(side="left", padx=5)
+                
+                # Tombol Hapus (Kanan)
+                ctk.CTkButton(row, text="Hapus", width=50, height=28, fg_color="#e74c3c", hover_color="#c0392b",
+                              command=lambda k=kat: aksi_hapus_kategori(k)).pack(side="left")
+
+        def aksi_edit_kategori(kat):
+            dialog = ctk.CTkInputDialog(text=f"Ubah nama kategori '{kat['nama']}':", title="Edit Kategori")
+            nama_baru = dialog.get_input()
+            if nama_baru and nama_baru.strip() and nama_baru.strip() != kat["nama"]:
+                db.update_kategori(kat["id"], nama_baru.strip())
+                refresh_kategori_list()
+                self.refresh_list() # Opsional: refresh layar utama jika diperlukan
+
+        def aksi_hapus_kategori(kat):
+            konfirmasi = messagebox.askyesno("Hapus Kategori", f"Yakin ingin menghapus kategori '{kat['nama']}'?")
+            if konfirmasi:
+                db.hapus_kategori(kat["id"])
+                refresh_kategori_list()
+
+        def aksi_tambah_kategori_dari_manajer():
+            dialog = ctk.CTkInputDialog(text="Nama kategori baru:", title="Tambah Kategori")
+            nama_baru = dialog.get_input()
+            if nama_baru and nama_baru.strip():
+                db.tambah_kategori(nama_baru.strip())
+                refresh_kategori_list()
+
+        # Tombol Tambah di paling bawah
+        ctk.CTkButton(win, text="+ Tambah Kategori Baru", height=40, font=ctk.CTkFont(weight="bold"),
+                     command=aksi_tambah_kategori_dari_manajer).pack(fill="x", padx=20, pady=(0, 20))
+
+        # Tampilkan data pertama kali dibuka
+        refresh_kategori_list()
