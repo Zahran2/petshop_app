@@ -44,9 +44,21 @@ class KasirFrame(ctk.CTkFrame):
         ctk.CTkLabel(self.cart_scroll, text="Keranjang masih kosong",
                     text_color=("gray50", "gray60")).pack(pady=20)
 
-        self.total_label = ctk.CTkLabel(cart_panel, text="Total: Rp 0",
+        bottom_bar = ctk.CTkFrame(cart_panel, fg_color="transparent")
+        bottom_bar.grid(row=2, column=0, sticky="ew", padx=15, pady=(10, 5))
+        bottom_bar.grid_columnconfigure(0, weight=1)
+
+        self.total_label = ctk.CTkLabel(bottom_bar, text="Total: Rp 0",
                                           font=ctk.CTkFont(size=19, weight="bold"))
-        self.total_label.grid(row=2, column=0, pady=(10, 5), padx=15, sticky="w")
+        self.total_label.grid(row=0, column=0, sticky="w")
+
+        self.btn_kosongkan = ctk.CTkButton(
+            bottom_bar, text="🗑️ Kosongkan Keranjang", width=80, height=28, 
+            fg_color="transparent", text_color="#C0392B", hover_color="#FADBD8",
+            font=ctk.CTkFont(size=12, weight="bold"), state="disabled",
+            command=self.kosongkan_keranjang
+        )
+        self.btn_kosongkan.grid(row=0, column=1, sticky="e")
 
         # Nielsen #5 (visibility) + #5 error prevention: tombol nonaktif kalau keranjang kosong,
         # jadi user langsung tahu belum bisa lanjut tanpa perlu coba klik dulu.
@@ -129,6 +141,14 @@ class KasirFrame(ctk.CTkFrame):
             self.cart.remove(item)
             self.refresh_cart()
 
+    def kosongkan_keranjang(self):
+        if not self.cart:
+            return
+        konfirmasi = messagebox.askyesno("Kosongkan Keranjang", "Yakin ingin menghapus semua barang dari keranjang?")
+        if konfirmasi:
+            self.cart = []
+            self.refresh_cart()
+
     def refresh_cart(self):
         for widget in self.cart_scroll.winfo_children():
             widget.destroy()
@@ -139,6 +159,7 @@ class KasirFrame(ctk.CTkFrame):
             self.total_label.configure(text="Total: Rp 0")
             self._current_total = 0
             self.bayar_btn.configure(state="disabled")
+            self.btn_kosongkan.configure(state="disabled")
             return
 
         total = 0
@@ -175,6 +196,7 @@ class KasirFrame(ctk.CTkFrame):
         self.total_label.configure(text=f"Total: {utils.format_rupiah(total)}")
         self._current_total = total
         self.bayar_btn.configure(state="normal")
+        self.btn_kosongkan.configure(state="normal")
 
     # ---------- Pembayaran ----------
 
@@ -187,7 +209,7 @@ class KasirFrame(ctk.CTkFrame):
 
         win = ctk.CTkToplevel(self)
         win.title("Pembayaran")
-        win.resizable(False, True)
+        win.resizable(True, True)
         win.grab_set()
 
         ctk.CTkLabel(win, text="Ringkasan Belanja", font=ctk.CTkFont(size=15, weight="bold")).pack(
@@ -212,6 +234,32 @@ class KasirFrame(ctk.CTkFrame):
         dibayar_entry.insert(0, "Rp ")
         dibayar_entry.focus()
         dibayar_entry.icursor("end")
+
+        quick_frame = ctk.CTkFrame(win, fg_color="transparent")
+        quick_frame.pack(fill="x", padx=20, pady=(8, 0))
+        
+        # Bagi frame menjadi 3 kolom dengan proporsi ukuran persis sama besar
+        quick_frame.grid_columnconfigure((0, 1, 2), weight=1)
+
+        def set_dibayar(nominal):
+            dibayar_entry.delete(0, "end")
+            dibayar_entry.insert(0, utils.format_rupiah(nominal))
+            update_kembalian() 
+
+        # Tombol Uang Pas (Warna Hijau)
+        ctk.CTkButton(quick_frame, text="Uang Pas", height=28,
+                      fg_color="#27ae60", hover_color="#2ecc71", font=ctk.CTkFont(size=12, weight="bold"),
+                      command=lambda: set_dibayar(total)).grid(row=0, column=0, sticky="ew", padx=(0, 4))
+                      
+        # Tombol 50 Ribu (Warna Biru)
+        ctk.CTkButton(quick_frame, text="Rp 50.000", height=28,
+                      fg_color="#3498db", hover_color="#2980b9", font=ctk.CTkFont(size=12, weight="bold"),
+                      command=lambda: set_dibayar(50000)).grid(row=0, column=1, sticky="ew", padx=4)
+                      
+        # Tombol 100 Ribu (Warna Biru)
+        ctk.CTkButton(quick_frame, text="Rp 100.000", height=28,
+                      fg_color="#3498db", hover_color="#2980b9", font=ctk.CTkFont(size=12, weight="bold"),
+                      command=lambda: set_dibayar(100000)).grid(row=0, column=2, sticky="ew", padx=(4, 0))
 
         kembalian_label = ctk.CTkLabel(win, text="Kembalian: -", font=ctk.CTkFont(size=13),
                                          text_color=("gray40", "gray65"))
@@ -281,4 +329,4 @@ class KasirFrame(ctk.CTkFrame):
         win.bind("<Escape>", lambda e: batal())
 
         win.update_idletasks()
-        win.geometry(f"380x{win.winfo_reqheight() + 10}")
+        win.geometry(f"450x{win.winfo_reqheight() + 10}")
