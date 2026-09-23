@@ -300,14 +300,14 @@ class KasirFrame(ctk.CTkFrame):
                 messagebox.showerror("Error", str(e))
                 return
 
-            win.destroy()
-            messagebox.showinfo(
-                "Transaksi Berhasil",
-                f"Transaksi #{trans_id}\n\n"
-                f"Total   : {utils.format_rupiah(total_final)}\n"
-                f"Dibayar : {utils.format_rupiah(dibayar)}\n"
-                f"Kembali : {utils.format_rupiah(kembalian)}",
-            )
+            win.destroy() # Tutup dialog pembayaran
+            
+            # --- AWAL PERUBAHAN ---
+            # Hapus messagebox.showinfo dan ganti dengan toast melayang
+            pesan_sukses = f"✅ Transaksi #{trans_id} Berhasil! Kembalian: {utils.format_rupiah(kembalian)}"
+            self.tampilkan_toast(pesan_sukses)
+            # --- AKHIR PERUBAHAN ---
+
             self.cart = []
             self.refresh_cart()
             self.refresh_produk_list()
@@ -330,3 +330,16 @@ class KasirFrame(ctk.CTkFrame):
 
         win.update_idletasks()
         win.geometry(f"450x{win.winfo_reqheight() + 10}")
+
+    def tampilkan_toast(self, pesan):
+        # Buat label melayang dengan warna background hijau
+        toast = ctk.CTkLabel(
+            self, text=pesan, fg_color="#27ae60", text_color="white",
+            corner_radius=8, font=ctk.CTkFont(size=14, weight="bold"),
+            padx=20, pady=10
+        )
+        # Posisikan melayang (floating) di tengah atas layar
+        toast.place(relx=0.5, rely=0.05, anchor="n")
+        
+        # Perintahkan aplikasi untuk menghancurkan (menghapus) toast ini setelah 3000 ms (3 detik)
+        self.after(5000, toast.destroy)
