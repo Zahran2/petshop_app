@@ -105,15 +105,24 @@ def hapus_produk(produk_id):
     conn.close()
 
 
-def get_semua_produk(keyword=None):
+def get_semua_produk(keyword=None, kategori=None):
     conn = get_connection()
+    
+    # Gunakan 1=1 agar mudah menambahkan kondisi AND selanjutnya
+    query = "SELECT * FROM produk WHERE 1=1"
+    params = []
+    
     if keyword:
-        rows = conn.execute(
-            "SELECT * FROM produk WHERE nama LIKE ? ORDER BY nama",
-            (f"%{keyword}%",),
-        ).fetchall()
-    else:
-        rows = conn.execute("SELECT * FROM produk ORDER BY nama").fetchall()
+        query += " AND nama LIKE ?"
+        params.append(f"%{keyword}%")
+        
+    if kategori and kategori != "Semua Kategori":
+        query += " AND kategori = ?"
+        params.append(kategori)
+        
+    query += " ORDER BY nama"
+    
+    rows = conn.execute(query, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 

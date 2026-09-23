@@ -26,11 +26,22 @@ class StokFrame(ctk.CTkFrame):
         self.search_var.trace_add("write", lambda *a: self.refresh_list())
         ctk.CTkEntry(top, placeholder_text="🔍  Cari produk...", height=36,
                     textvariable=self.search_var).grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        
+        # 1. Tambahkan Variabel & Dropdown Filter Kategori
+        self.filter_kat_var = ctk.StringVar(value="Semua Kategori")
+        self.filter_kat_combo = ctk.CTkComboBox(top, variable=self.filter_kat_var, height=36, 
+                                                command=lambda e: self.refresh_list())
+        self.filter_kat_combo.grid(row=0, column=1, padx=(0, 10))
+        
+        # 2. Geser kolom grid untuk tombol Kelola dan Tambah (column=2 dan 3)
         ctk.CTkButton(top, text="Kelola Kategori", height=36, fg_color="#636e72", hover_color="#2d3436",
-                     command=self.buka_kelola_kategori).grid(row=0, column=1, padx=(0, 10))
+                     command=self.buka_kelola_kategori).grid(row=0, column=2, padx=(0, 10))
                      
         ctk.CTkButton(top, text="+ Tambah Produk", height=36,
-                     command=self.form_tambah).grid(row=0, column=2)
+                     command=self.form_tambah).grid(row=0, column=3)
+                     
+        # 3. Panggil fungsi refresh filter saat UI pertama kali dibentuk
+        self.refresh_kategori_filter()
 
         self._kolom_headings = {"nama": "Nama Produk", "kategori": "Kategori", "harga": "Harga Jual",
                                  "stok": "Stok", "satuan": "Satuan"}
@@ -75,11 +86,26 @@ class StokFrame(ctk.CTkFrame):
         self._apply_treeview_style()
         self._apply_treeview_columns()
 
+    def refresh_kategori_filter(self):
+        """Memperbarui daftar pilihan pada dropdown filter kategori di layar stok"""
+        daftar_kat = db.get_semua_kategori()
+        pilihan = ["Semua Kategori"] + daftar_kat
+        
+        self.filter_kat_combo.configure(values=pilihan)
+        # Jika kategori yang sedang difilter tiba-tiba dihapus, kembalikan ke "Semua Kategori"
+        if self.filter_kat_var.get() not in pilihan:
+            self.filter_kat_var.set("Semua Kategori")
+            self.refresh_list()
+
     def refresh_list(self):
         for row in self.tree.get_children():
             self.tree.delete(row)
+            
         keyword = self.search_var.get()
-        for p in db.get_semua_produk(keyword):
+        kategori_terpilih = self.filter_kat_var.get() # Ambil pilihan dari dropdown filter
+        
+        # Kirim kedua parameter (keyword dan kategori)
+        for p in db.get_semua_produk(keyword, kategori_terpilih):
             tag = "low_stock" if p["stok"] <= BATAS_STOK_MENIPIS else ""
             self.tree.insert(
                 "", "end", iid=str(p["id"]),
@@ -173,6 +199,8 @@ class StokFrame(ctk.CTkFrame):
                         
                         # Paksa update tampilan
                         win.update_idletasks()
+
+                        self.refresh_kategori_filter()
                         
                 btn_plus = ctk.CTkButton(cat_frame, text="+", width=34, height=34, command=aksi_tambah_kategori)
                 btn_plus.pack(side="right", padx=(8, 0))
@@ -314,6 +342,8 @@ class StokFrame(ctk.CTkFrame):
                 # Tombol Hapus (Kanan)
                 ctk.CTkButton(row, text="Hapus", width=50, height=28, fg_color="#e74c3c", hover_color="#c0392b",
                               command=lambda k=kat: aksi_hapus_kategori(k)).pack(side="left")
+            
+            self.refresh_kategori_filter()
 
         def aksi_edit_kategori(kat):
             dialog = ctk.CTkInputDialog(text=f"Ubah nama kategori '{kat['nama']}':", title="Edit Kategori")
