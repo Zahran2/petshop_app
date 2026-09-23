@@ -39,7 +39,9 @@ class StokFrame(ctk.CTkFrame):
                      
         ctk.CTkButton(top, text="+ Tambah Produk", height=36,
                      command=self.form_tambah).grid(row=0, column=3)
-                     
+        
+        self.filter_stok_var = ctk.BooleanVar(value=False)
+
         # 3. Panggil fungsi refresh filter saat UI pertama kali dibentuk
         self.refresh_kategori_filter()
 
@@ -57,8 +59,18 @@ class StokFrame(ctk.CTkFrame):
 
         info_row = ctk.CTkFrame(self, fg_color="transparent")
         info_row.grid(row=2, column=0, sticky="ew", pady=(5, 0))
+        
+        # Label indikator warna merah (kiri)
         ctk.CTkLabel(info_row, text=f"🔴  Baris merah = stok tinggal {BATAS_STOK_MENIPIS} atau kurang",
                     text_color=("gray40", "gray65"), font=ctk.CTkFont(size=12)).pack(side="left")
+
+        # Checkbox Filter Stok Menipis (kanan)
+        ctk.CTkCheckBox(
+            info_row, text="⚠️ Hanya tampilkan stok menipis", 
+            variable=self.filter_stok_var, command=self.refresh_list,
+            font=ctk.CTkFont(size=12, weight="bold"), 
+            text_color="#C0392B", fg_color="#C0392B", hover_color="#922B21"
+        ).pack(side="right", padx=(0, 10))
 
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.grid(row=3, column=0, sticky="ew", pady=(10, 0))
@@ -137,10 +149,14 @@ class StokFrame(ctk.CTkFrame):
             self.tree.delete(row)
             
         keyword = self.search_var.get()
-        kategori_terpilih = self.filter_kat_var.get() # Ambil pilihan dari dropdown filter
+        kategori_terpilih = self.filter_kat_var.get() 
+        hanya_menipis = self.filter_stok_var.get() # Ambil status checkbox (True/False)
         
-        # Kirim kedua parameter (keyword dan kategori)
         for p in db.get_semua_produk(keyword, kategori_terpilih):
+            # Jika dicentang, dan stoknya masih lebih dari batas aman, abaikan (jangan ditampikan)
+            if hanya_menipis and p["stok"] > BATAS_STOK_MENIPIS:
+                continue
+                
             tag = "low_stock" if p["stok"] <= BATAS_STOK_MENIPIS else ""
             self.tree.insert(
                 "", "end", iid=str(p["id"]),
