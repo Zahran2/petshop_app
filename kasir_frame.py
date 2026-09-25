@@ -144,6 +144,31 @@ class KasirFrame(ctk.CTkFrame):
 
     # ---------- Keranjang ----------
 
+    # ---------- Keranjang ----------
+
+    def _update_total_keranjang(self):
+        total = sum(item["harga_satuan"] * item["jumlah"] for item in self.cart)
+        self.total_label.configure(text=f"Total: {utils.format_rupiah(total)}")
+        self._current_total = total
+        
+        status = "normal" if total > 0 else "disabled"
+        self.bayar_btn.configure(state=status)
+        self.btn_kosongkan.configure(state=status)
+
+    def hapus_dari_cart(self, item):
+        """Menghapus item secara langsung dari keranjang."""
+        if item in self.cart:
+            self.cart.remove(item)
+            self.refresh_cart()
+
+    def kosongkan_keranjang(self):
+        if not self.cart:
+            return
+        konfirmasi = messagebox.askyesno("Kosongkan Keranjang", "Yakin ingin menghapus semua barang dari keranjang?")
+        if konfirmasi:
+            self.cart = []
+            self.refresh_cart()
+
     def tambah_ke_cart(self, produk):
         for item in self.cart:
             if item["produk_id"] == produk["id"]:
@@ -151,7 +176,19 @@ class KasirFrame(ctk.CTkFrame):
                     messagebox.showwarning("Stok tidak cukup", f"Stok {produk['nama']} tidak cukup")
                     return
                 item["jumlah"] += 1
-                self.refresh_cart()
+                
+                # --- UPDATE INSTAN (Trik Entry Anti-Ghosting) ---
+                item["ui_jumlah"].configure(state="normal")
+                item["ui_jumlah"].delete(0, "end")
+                item["ui_jumlah"].insert(0, str(item["jumlah"]))
+                item["ui_jumlah"].configure(state="disabled")
+                
+                item["ui_subtotal"].configure(state="normal")
+                item["ui_subtotal"].delete(0, "end")
+                item["ui_subtotal"].insert(0, utils.format_rupiah(item["harga_satuan"] * item["jumlah"]))
+                item["ui_subtotal"].configure(state="disabled")
+                
+                self._update_total_keranjang()
                 return
 
         self.cart.append({
@@ -167,26 +204,26 @@ class KasirFrame(ctk.CTkFrame):
         baru = item["jumlah"] + delta
         if baru <= 0:
             self.cart.remove(item)
+            self.refresh_cart() # Refresh full karena ada baris yang harus hilang
+            return
         elif baru > item["stok_tersedia"]:
             messagebox.showwarning("Stok tidak cukup", "Jumlah melebihi stok yang tersedia")
             return
         else:
             item["jumlah"] = baru
-        self.refresh_cart()
-
-    def hapus_dari_cart(self, item):
-        """Menghapus item secara langsung dari keranjang berapapun jumlahnya."""
-        if item in self.cart:
-            self.cart.remove(item)
-            self.refresh_cart()
-
-    def kosongkan_keranjang(self):
-        if not self.cart:
-            return
-        konfirmasi = messagebox.askyesno("Kosongkan Keranjang", "Yakin ingin menghapus semua barang dari keranjang?")
-        if konfirmasi:
-            self.cart = []
-            self.refresh_cart()
+            
+            # --- UPDATE INSTAN (Trik Entry Anti-Ghosting) ---
+            item["ui_jumlah"].configure(state="normal")
+            item["ui_jumlah"].delete(0, "end")
+            item["ui_jumlah"].insert(0, str(item["jumlah"]))
+            item["ui_jumlah"].configure(state="disabled")
+            
+            item["ui_subtotal"].configure(state="normal")
+            item["ui_subtotal"].delete(0, "end")
+            item["ui_subtotal"].insert(0, utils.format_rupiah(item["harga_satuan"] * item["jumlah"]))
+            item["ui_subtotal"].configure(state="disabled")
+            
+            self._update_total_keranjang()
 
     def refresh_cart(self):
         for widget in self.cart_scroll.winfo_children():
@@ -215,22 +252,31 @@ class KasirFrame(ctk.CTkFrame):
             ctrl = ctk.CTkFrame(row, fg_color="transparent")
             ctrl.pack(fill="x")
             
-            # Bagian Kiri: Tombol Minus, Angka, Tombol Plus
             ctk.CTkButton(ctrl, text="-", width=26, height=26,
                          command=lambda it=item: self.ubah_jumlah(it, -1)).pack(side="left")
-            ctk.CTkLabel(ctrl, text=str(item["jumlah"]), width=30).pack(side="left")
+            
+            # --- UBAH MENJADI ENTRY YANG DISAMARKAN ---
+            lbl_jumlah = ctk.CTkEntry(ctrl, width=35, height=26, fg_color="transparent", 
+                                      border_width=0, justify="center", text_color=("black", "white"))
+            lbl_jumlah.insert(0, str(item["jumlah"]))
+            lbl_jumlah.configure(state="disabled") # Kunci agar terlihat seperti label biasa
+            lbl_jumlah.pack(side="left")
+            item["ui_jumlah"] = lbl_jumlah
+            
             ctk.CTkButton(ctrl, text="+", width=26, height=26,
                          command=lambda it=item: self.ubah_jumlah(it, 1)).pack(side="left")
             
-            # Bagian Kanan: Karena pakai side="right", urutan nulisnya dari ujung kanan ke kiri.
-            
-            # 1. Tombol X (paling ujung kanan)
             ctk.CTkButton(ctrl, text="X", width=26, height=26, 
                          fg_color="#C0392B", hover_color="#922B21", font=ctk.CTkFont(weight="bold"),
                          command=lambda it=item: self.hapus_dari_cart(it)).pack(side="right")
                          
-            # 2. Label Subtotal (di sebelah kiri tombol X)
-            ctk.CTkLabel(ctrl, text=utils.format_rupiah(subtotal), anchor="e").pack(side="right", padx=(0, 10))
+            # --- UBAH MENJADI ENTRY YANG DISAMARKAN ---
+            lbl_subtotal = ctk.CTkEntry(ctrl, width=110, height=26, fg_color="transparent", 
+                                        border_width=0, justify="right", text_color=("black", "white"))
+            lbl_subtotal.insert(0, utils.format_rupiah(subtotal))
+            lbl_subtotal.configure(state="disabled")
+            lbl_subtotal.pack(side="right", padx=(0, 10))
+            item["ui_subtotal"] = lbl_subtotal
 
         self.total_label.configure(text=f"Total: {utils.format_rupiah(total)}")
         self._current_total = total
