@@ -27,3 +27,6 @@ dist/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Gambar atau file media yang diunggah
+img_produk/
