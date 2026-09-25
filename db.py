@@ -28,12 +28,25 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nama TEXT NOT NULL,
             kategori TEXT DEFAULT '',
+            harga_beli REAL DEFAULT 0,
             harga_jual REAL NOT NULL,
             stok INTEGER NOT NULL DEFAULT 0,
             satuan TEXT DEFAULT 'pcs',
-            gambar TEXT DEFAULT '' 
+            gambar TEXT DEFAULT ''
         )
     """)
+
+    # --- TRIK PENYELAMATAN DATA MODAL ---
+    # --- TRIK PENYELAMATAN DATA MODAL ---
+    try:
+        cur.execute("ALTER TABLE produk ADD COLUMN harga_beli REAL DEFAULT 0")
+        cur.execute("UPDATE produk SET harga_beli = harga_jual")
+    except sqlite3.OperationalError:
+        pass 
+
+    # --- TAMBAHKAN BARIS INI ---
+    # Otomatis jadikan Harga Jual = 0 JIKA angkanya masih sama persis dengan Harga Beli
+    cur.execute("UPDATE produk SET harga_jual = 0 WHERE harga_jual = harga_beli")
     # Memperbarui database lama dengan kolom baru tanpa menghapus data
     try:
         cur.execute("ALTER TABLE produk ADD COLUMN gambar TEXT DEFAULT ''")
@@ -79,26 +92,33 @@ def init_db():
         )
     """)
 
+    # --- TAMBAHAN: Kolom Keuntungan di Riwayat Transaksi ---
+    try:
+        cur.execute("ALTER TABLE transaksi ADD COLUMN keuntungan REAL DEFAULT 0")
+        cur.execute("ALTER TABLE transaksi_detail ADD COLUMN harga_beli REAL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
     conn.commit()
     conn.close()
 
 
 # ---------------- PRODUK ----------------
 
-def tambah_produk(nama, kategori, harga_jual, stok, satuan="pcs", gambar=""):
+def tambah_produk(nama, kategori, harga_beli, harga_jual, stok, satuan="pcs", gambar=""):
     conn = get_connection()
     conn.execute(
-        "INSERT INTO produk (nama, kategori, harga_jual, stok, satuan, gambar) VALUES (?, ?, ?, ?, ?, ?)",
-        (nama, kategori, harga_jual, stok, satuan, gambar),
+        "INSERT INTO produk (nama, kategori, harga_beli, harga_jual, stok, satuan, gambar) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (nama, kategori, harga_beli, harga_jual, stok, satuan, gambar),
     )
     conn.commit()
     conn.close()
 
-def update_produk(produk_id, nama, kategori, harga_jual, stok, satuan, gambar):
+def update_produk(produk_id, nama, kategori, harga_beli, harga_jual, stok, satuan, gambar):
     conn = get_connection()
     conn.execute(
-        "UPDATE produk SET nama=?, kategori=?, harga_jual=?, stok=?, satuan=?, gambar=? WHERE id=?",
-        (nama, kategori, harga_jual, stok, satuan, gambar, produk_id),
+        "UPDATE produk SET nama=?, kategori=?, harga_beli=?, harga_jual=?, stok=?, satuan=?, gambar=? WHERE id=?",
+        (nama, kategori, harga_beli, harga_jual, stok, satuan, gambar, produk_id),
     )
     conn.commit()
     conn.close()
@@ -188,20 +208,17 @@ def get_kategori_lengkap():
 # ---------------- TRANSAKSI ----------------
 
 def buat_transaksi(items, dibayar):
-    """
-    items: list of dict {produk_id, nama_produk, harga_satuan, jumlah}
-    Validasi stok, simpan transaksi + detail, dan kurangi stok otomatis.
-    Return: (transaksi_id, total, kembalian)
-    Raise ValueError kalau stok kurang atau uang dibayar kurang dari total.
-    """
     if not items:
         raise ValueError("Keranjang masih kosong")
 
     conn = get_connection()
     cur = conn.cursor()
+    
+    total_keuntungan = 0
 
+    # 1. Validasi stok sekaligus mengambil Harga Beli (modal) saat ini
     for item in items:
-        row = cur.execute("SELECT stok, nama FROM produk WHERE id=?", (item["produk_id"],)).fetchone()
+        row = cur.execute("SELECT stok, nama, harga_beli FROM produk WHERE id=?", (item["produk_id"],)).fetchone()
         if row is None:
             conn.close()
             raise ValueError(f"Produk '{item['nama_produk']}' tidak ditemukan di database")
@@ -210,20 +227,29 @@ def buat_transaksi(items, dibayar):
             raise ValueError(
                 f"Stok '{row['nama']}' tidak cukup - tersedia {row['stok']}, diminta {item['jumlah']}"
             )
+        # Simpan modal ke memory sementara (tidak masuk ke UI kasir, hanya untuk hitungan)
+        item["db_harga_beli"] = row["harga_beli"]
 
+    # 2. Hitung Total, Kembalian, dan Profit
     total = sum(item["harga_satuan"] * item["jumlah"] for item in items)
     kembalian = dibayar - total
+    
     if kembalian < 0:
         conn.close()
         raise ValueError(
-            f"Uang dibayar (Rp {utils.format_ribuan(dibayar)}) kurang dari "
-            f"total (Rp {utils.format_ribuan(total)})"
+            f"Uang dibayar (Rp {utils.format_ribuan(dibayar)}) kurang dari total (Rp {utils.format_ribuan(total)})"
         )
+        
+    for item in items:
+        # Profit per item = (Harga Jual - Harga Beli) x Jumlah Barang
+        profit_per_item = (item["harga_satuan"] - item["db_harga_beli"]) * item["jumlah"]
+        total_keuntungan += profit_per_item
 
+    # 3. Simpan ke database
     tanggal = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cur.execute(
-        "INSERT INTO transaksi (tanggal, total, dibayar, kembalian) VALUES (?, ?, ?, ?)",
-        (tanggal, total, dibayar, kembalian),
+        "INSERT INTO transaksi (tanggal, total, dibayar, kembalian, keuntungan) VALUES (?, ?, ?, ?, ?)",
+        (tanggal, total, dibayar, kembalian, total_keuntungan),
     )
     transaksi_id = cur.lastrowid
 
@@ -231,10 +257,10 @@ def buat_transaksi(items, dibayar):
         subtotal = item["harga_satuan"] * item["jumlah"]
         cur.execute(
             """INSERT INTO transaksi_detail
-               (transaksi_id, produk_id, nama_produk, harga_satuan, jumlah, subtotal)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+               (transaksi_id, produk_id, nama_produk, harga_satuan, jumlah, subtotal, harga_beli)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (transaksi_id, item["produk_id"], item["nama_produk"],
-             item["harga_satuan"], item["jumlah"], subtotal),
+             item["harga_satuan"], item["jumlah"], subtotal, item["db_harga_beli"]),
         )
         cur.execute("UPDATE produk SET stok = stok - ? WHERE id = ?", (item["jumlah"], item["produk_id"]))
 

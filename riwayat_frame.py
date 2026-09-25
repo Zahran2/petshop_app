@@ -39,10 +39,10 @@ class RiwayatFrame(ctk.CTkFrame):
         ctk.CTkButton(top, text="⬇️ Export CSV", width=100, fg_color="#27ae60", hover_color="#2ecc71",
                       command=self.export_csv).grid(row=0, column=3, padx=(10, 0))
 
-        self._kolom_headings = {"waktu": "Waktu", "total": "Total", "dibayar": "Dibayar", "kembalian": "Kembalian"}
+        self._kolom_headings = {"waktu": "Waktu", "total": "Pendapatan", "keuntungan": "Profit", "dibayar": "Dibayar", "kembalian": "Kembalian"}
 
         self._apply_treeview_style()
-        columns = ("waktu", "total", "dibayar", "kembalian")
+        columns = ("waktu", "total", "keuntungan", "dibayar", "kembalian")
         self.tree = ttk.Treeview(self, columns=columns, show="headings", selectmode="browse")
         self._apply_treeview_columns()
         self.tree.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
@@ -78,29 +78,32 @@ class RiwayatFrame(ctk.CTkFrame):
         for row in self.tree.get_children():
             self.tree.delete(row)
             
-        # 1. Ambil nilai filter yang dipilih
         filter_terpilih = self.filter_waktu_var.get()
-        
-        # 2. Ambil data dari database sesuai filter
         data_transaksi = db.get_riwayat_transaksi(filter_terpilih)
         
-        # Variabel untuk menghitung total pendapatan
         total_pendapatan = 0
+        total_profit = 0
         
         for t in data_transaksi:
             total_pendapatan += t["total"]
+            profit_transaksi = t.get("keuntungan", 0) # Pakai .get() agar aman dari transaksi lama
+            total_profit += profit_transaksi
+            
             self.tree.insert(
                 "", "end", iid=str(t["id"]),
-                values=(t["tanggal"], utils.format_rupiah(t["total"]),
-                       utils.format_rupiah(t["dibayar"]), utils.format_rupiah(t["kembalian"])),
+                values=(
+                    t["tanggal"], 
+                    utils.format_rupiah(t["total"]),
+                    utils.format_rupiah(profit_transaksi),
+                    utils.format_rupiah(t["dibayar"]), 
+                    utils.format_rupiah(t["kembalian"])
+                ),
             )
 
-        # 3. Update label ringkasan secara dinamis
-        self.ringkasan_label.configure(
-            text=f"{filter_terpilih}: {len(data_transaksi)} transaksi  •  {utils.format_rupiah(total_pendapatan)}"
-        )
+        # Update label ringkasan agar memunculkan dua nominal
+        teks_ringkasan = f"{filter_terpilih}: {len(data_transaksi)} transaksi   |   Omzet: {utils.format_rupiah(total_pendapatan)}   |   Profit Bersih: {utils.format_rupiah(total_profit)}"
+        self.ringkasan_label.configure(text=teks_ringkasan)
         
-        # 4. Bersihkan detail box agar tidak bingung saat filter diganti
         self.detail_box.configure(state="normal")
         self.detail_box.delete("1.0", "end")
         self.detail_box.insert("1.0", "Klik salah satu transaksi di atas untuk melihat detail item yang terjual.")
@@ -113,10 +116,13 @@ class RiwayatFrame(ctk.CTkFrame):
         if sel:
             trans_id = int(sel[0])
             for d in db.get_detail_transaksi(trans_id):
+                modal = d.get('harga_beli', 0)
+                profit_item = (d['harga_satuan'] - modal) * d['jumlah']
+                
                 self.detail_box.insert(
                     "end",
-                    f"{d['nama_produk']}  x{d['jumlah']}  @ {utils.format_rupiah(d['harga_satuan'])}"
-                    f"  =  {utils.format_rupiah(d['subtotal'])}\n",
+                    f"{d['nama_produk']}  x{d['jumlah']}  @ {utils.format_rupiah(d['harga_satuan'])}  =  {utils.format_rupiah(d['subtotal'])}\n"
+                    f"   ↳ (Modal: {utils.format_rupiah(modal)}  |  Profit: {utils.format_rupiah(profit_item)})\n\n"
                 )
         self.detail_box.configure(state="disabled")
 

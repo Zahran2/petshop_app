@@ -52,12 +52,13 @@ class StokFrame(ctk.CTkFrame):
         # 3. Panggil fungsi refresh filter saat UI pertama kali dibentuk
         self.refresh_kategori_filter()
 
-        self._kolom_headings = {"nama": "Nama Produk", "kategori": "Kategori", "harga": "Harga Jual",
-                                 "stok": "Stok", "satuan": "Satuan"}
-        self._kolom_widths = {"nama": 220, "kategori": 140, "harga": 110, "stok": 80, "satuan": 90}
+        self._kolom_headings = {"nama": "Nama Produk", "kategori": "Kategori", "harga_beli": "Harga Modal", "harga_jual": "Harga Jual", "stok": "Stok", "satuan": "Satuan"}
+        
+        # Atur lebar kolom agar muat
+        self._kolom_widths = {"nama": 200, "kategori": 120, "harga_beli": 110, "harga_jual": 110, "stok": 70, "satuan": 80}
 
         self._apply_treeview_style()
-        columns = ("nama", "kategori", "harga", "stok", "satuan")
+        columns = ("nama", "kategori", "harga_beli", "harga_jual", "stok", "satuan")
         self.tree = ttk.Treeview(self, columns=columns, show="headings", selectmode="browse")
         self._apply_treeview_columns()
 
@@ -167,7 +168,7 @@ class StokFrame(ctk.CTkFrame):
             tag = "low_stock" if p["stok"] <= BATAS_STOK_MENIPIS else ""
             self.tree.insert(
                 "", "end", iid=str(p["id"]),
-                values=(p["nama"], p["kategori"], utils.format_rupiah(p["harga_jual"]), p["stok"], p["satuan"]),
+                values=(p["nama"], p["kategori"], utils.format_rupiah(p["harga_beli"]), utils.format_rupiah(p["harga_jual"]), p["stok"], p["satuan"]),
                 tags=(tag,) if tag else (),
             )
 
@@ -233,6 +234,7 @@ class StokFrame(ctk.CTkFrame):
         labels = [
             ("nama", "Nama Produk", ""),
             ("kategori", "Kategori", ""),
+            ("harga_beli", "Harga Modal / Beli (Rp)", ""),
             ("harga_jual", "Harga Jual (Rp)", ""),
             ("stok", "Stok", ""),
             ("satuan", "Satuan (pcs / kg / pack / dll)", "pcs"),
@@ -301,7 +303,7 @@ class StokFrame(ctk.CTkFrame):
             entry = ctk.CTkEntry(win, height=34)
             entry.pack(fill="x", padx=25)
 
-            if key == "harga_jual":
+            if key in ("harga_beli", "harga_jual"):
                 # "Rp " selalu ada di depan, bahkan pas kosong - biar user
                 # langsung ngerti ini field duit dari awal lihat.
                 entry.insert(0, "Rp " + utils.format_ribuan(produk[key]) if produk else "Rp ")
@@ -390,7 +392,8 @@ class StokFrame(ctk.CTkFrame):
                 messagebox.showerror("Error", "Nama produk tidak boleh kosong")
                 return
             try:
-                harga = utils.parse_angka(fields["harga_jual"].get())
+                harga_beli = utils.parse_angka(fields["harga_beli"].get())
+                harga_jual = utils.parse_angka(fields["harga_jual"].get())
                 stok = utils.parse_angka(fields["stok"].get())
             except ValueError:
                 cek_harga(True)
@@ -400,9 +403,9 @@ class StokFrame(ctk.CTkFrame):
 
             # Perbarui pemanggilan fungsi db untuk menyertakan nama_file_gambar
             if produk:
-                db.update_produk(produk["id"], nama, kategori, harga, stok, satuan, nama_file_gambar)
+                db.update_produk(produk["id"], nama, kategori, harga_beli, harga_jual, stok, satuan, nama_file_gambar)
             else:
-                db.tambah_produk(nama, kategori, harga, stok, satuan, nama_file_gambar)
+                db.tambah_produk(nama, kategori, harga_beli, harga_jual, stok, satuan, nama_file_gambar)
 
             messagebox.showinfo("Tersimpan", f"Produk '{nama}' berhasil disimpan")
             win.destroy()
