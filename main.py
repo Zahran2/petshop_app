@@ -109,17 +109,27 @@ class App(ctk.CTk):
             frame.grid(row=0, column=0, sticky="nsew")
 
     def tampilkan(self, key):
-        self.frames[key].tkraise()
-        if key == "riwayat":
-            self.frames["riwayat"].refresh()
-        elif key == "stok":
-            self.frames["stok"].refresh_list()
-        elif key == "kasir":
-            self.frames["kasir"].refresh_produk_list()
+        # 1. Cegah proses ulang jika mengklik menu yang memang sudah terbuka (menghemat memori)
+        if hasattr(self, "_menu_saat_ini") and self._menu_saat_ini == key:
+            return
+        self._menu_saat_ini = key
 
+        # 2. Pindahkan layar ke depan seketika itu juga!
+        self.frames[key].tkraise()
+
+        # 3. Ubah warna tombol yang aktif tanpa tertahan proses lain
         for k, btn in self.buttons.items():
-            is_active = k == key
+            is_active = (k == key)
             btn.configure(fg_color=("#E8C9A0", "#5A4527") if is_active else "transparent")
+
+        # 4. Trik Jeda Mikro: Biarkan antarmuka merespons klik dulu, 
+        # baru muat datanya 50 milidetik kemudian.
+        if key == "riwayat":
+            self.after(50, self.frames["riwayat"].refresh)
+        elif key == "stok":
+            self.after(50, self.frames["stok"].refresh_list)
+        elif key == "kasir":
+            self.after(50, self.frames["kasir"].refresh_produk_list)
 
     def _perbarui_kontrol_skala(self):
         self.skala_label.configure(text=f"{round(utils.skala_teks * 100)}%")

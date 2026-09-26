@@ -394,6 +394,14 @@ class StokFrame(ctk.CTkFrame):
                 cek_nama()
                 messagebox.showerror("Error", "Nama produk tidak boleh kosong")
                 return
+            id_sekarang = produk["id"] if produk else None
+            if db.cek_nama_produk_ada(nama, id_sekarang):
+                messagebox.showerror(
+                    "Peringatan", 
+                    f"Produk dengan nama '{nama}' sudah ada di database!\n\nSilakan gunakan nama lain atau tambahkan ukuran/rasa (misal: {nama} 500gr)."
+                )
+                fields["nama"].focus() # Kembalikan kursor ke kolom nama
+                return
             try:
                 harga_beli = utils.parse_angka(fields["harga_beli"].get())
                 harga_jual = utils.parse_angka(fields["harga_jual"].get())

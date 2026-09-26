@@ -155,12 +155,32 @@ def get_semua_produk(keyword=None, kategori=None):
     conn.close()
     return [dict(r) for r in rows]
 
-
 def get_produk_by_id(produk_id):
     conn = get_connection()
     row = conn.execute("SELECT * FROM produk WHERE id=?", (produk_id,)).fetchone()
     conn.close()
     return dict(row) if row else None
+
+def cek_nama_produk_ada(nama, produk_id_kecuali=None):
+    """
+    Mengecek apakah nama produk sudah dipakai.
+    LOWER() digunakan agar 'Whiskas' dan 'whiskas' dianggap sama.
+    """
+    conn = get_connection()
+    if produk_id_kecuali:
+        # Pengecekan saat mode Edit (abaikan nama produk itu sendiri)
+        row = conn.execute(
+            "SELECT id FROM produk WHERE LOWER(nama) = LOWER(?) AND id != ?", 
+            (nama, produk_id_kecuali)
+        ).fetchone()
+    else:
+        # Pengecekan saat mode Tambah Baru
+        row = conn.execute(
+            "SELECT id FROM produk WHERE LOWER(nama) = LOWER(?)", 
+            (nama,)
+        ).fetchone()
+    conn.close()
+    return row is not None
 
 # ---------------- KATEGORI ----------------
 
