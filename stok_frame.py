@@ -152,7 +152,7 @@ class StokFrame(ctk.CTkFrame):
             self.filter_kat_var.set("Semua Kategori")
             self.refresh_list()
 
-    def refresh_list(self):
+    def refresh_list(self, highlight_id=None):
         for row in self.tree.get_children():
             self.tree.delete(row)
             
@@ -171,6 +171,14 @@ class StokFrame(ctk.CTkFrame):
                 values=(p["nama"], p["kategori"], utils.format_rupiah(p["harga_beli"]), utils.format_rupiah(p["harga_jual"]), p["stok"], p["satuan"]),
                 tags=(tag,) if tag else (),
             )
+
+        # --- TAMBAHKAN LOGIKA HIGHLIGHT DI SINI (Di luar/bawah loop for) ---
+        if highlight_id:
+            item_id = str(highlight_id)
+            if self.tree.exists(item_id):
+                self.tree.selection_set(item_id) # Blok dengan warna seleksi (biru)
+                self.tree.focus(item_id)         # Fokuskan sistem ke baris tersebut
+                self.tree.see(item_id)           # Otomatis scroll tabel sampai barang ini terlihat
 
     def form_tambah(self):
         self._buka_form()
@@ -396,10 +404,12 @@ class StokFrame(ctk.CTkFrame):
 
             if produk:
                 db.update_produk(produk["id"], nama, kategori, harga_beli, harga_jual, stok, satuan, nama_file_gambar)
+                id_terbaru = produk["id"]
             else:
-                db.tambah_produk(nama, kategori, harga_beli, harga_jual, stok, satuan, nama_file_gambar)
+                id_terbaru = db.tambah_produk(nama, kategori, harga_beli, harga_jual, stok, satuan, nama_file_gambar)
 
-            self.refresh_list()
+            # Perbarui tabel dan perintahkan untuk menyorot barang terbaru
+            self.refresh_list(highlight_id=id_terbaru)
 
             # --- LOGIKA TOMBOL BARU ---
             if tutup_jendela:

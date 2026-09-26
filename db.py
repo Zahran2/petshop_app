@@ -107,12 +107,15 @@ def init_db():
 
 def tambah_produk(nama, kategori, harga_beli, harga_jual, stok, satuan="pcs", gambar=""):
     conn = get_connection()
-    conn.execute(
+    cur = conn.cursor()
+    cur.execute(
         "INSERT INTO produk (nama, kategori, harga_beli, harga_jual, stok, satuan, gambar) VALUES (?, ?, ?, ?, ?, ?, ?)",
         (nama, kategori, harga_beli, harga_jual, stok, satuan, gambar),
     )
+    id_baru = cur.lastrowid  # Tangkap ID barang yang baru saja masuk
     conn.commit()
     conn.close()
+    return id_baru           # Kembalikan ID tersebut ke aplikasi
 
 def update_produk(produk_id, nama, kategori, harga_beli, harga_jual, stok, satuan, gambar):
     conn = get_connection()
