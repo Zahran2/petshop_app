@@ -365,27 +365,22 @@ class StokFrame(ctk.CTkFrame):
         fields["stok"].bind("<KeyRelease>", lambda e: cek_stok(False), add="+")
         fields["stok"].bind("<FocusOut>", lambda e: cek_stok(True), add="+")
 
-        def simpan():
+        def simpan(tutup_jendela=True):
             nama = fields["nama"].get().strip()
             kategori = fields["kategori"].get().strip()
             satuan = fields["satuan"].get().strip() or "pcs"
             
-            # --- PROSES SIMPAN GAMBAR ---
+            # --- PROSES GAMBAR ---
             nama_file_gambar = nama_gambar_lama
             if self.path_gambar_baru:
-                # Buat folder img_produk jika belum ada
                 folder_img = os.path.join(os.path.dirname(os.path.abspath(__file__)), "img_produk")
                 os.makedirs(folder_img, exist_ok=True)
-                
-                # Buat nama file baru berbasis waktu
                 ekstensi = os.path.splitext(self.path_gambar_baru)[1]
                 import time
                 nama_file_gambar = f"prod_{int(time.time())}{ekstensi}"
-                
-                # Salin gambar ke folder aplikasi
                 tujuan = os.path.join(folder_img, nama_file_gambar)
+                import shutil
                 shutil.copy(self.path_gambar_baru, tujuan)
-            # ----------------------------
 
             if not nama:
                 cek_nama()
@@ -396,40 +391,68 @@ class StokFrame(ctk.CTkFrame):
                 harga_jual = utils.parse_angka(fields["harga_jual"].get())
                 stok = utils.parse_angka(fields["stok"].get())
             except ValueError:
-                cek_harga(True)
-                cek_stok(True)
-                messagebox.showerror("Error", "Harga dan stok tidak boleh kosong")
+                messagebox.showerror("Error", "Harga dan stok harus diisi dengan benar")
                 return
 
-            # Perbarui pemanggilan fungsi db untuk menyertakan nama_file_gambar
             if produk:
                 db.update_produk(produk["id"], nama, kategori, harga_beli, harga_jual, stok, satuan, nama_file_gambar)
             else:
                 db.tambah_produk(nama, kategori, harga_beli, harga_jual, stok, satuan, nama_file_gambar)
 
-            messagebox.showinfo("Tersimpan", f"Produk '{nama}' berhasil disimpan")
-            win.destroy()
             self.refresh_list()
+
+            # --- LOGIKA TOMBOL BARU ---
+            if tutup_jendela:
+                messagebox.showinfo("Tersimpan", f"Produk '{nama}' berhasil disimpan")
+                win.destroy()
+            else:
+                # Bersihkan form untuk barang selanjutnya
+                fields["nama"].delete(0, "end")
+                fields["stok"].delete(0, "end")
+                
+                fields["harga_beli"].delete(0, "end")
+                fields["harga_beli"].insert(0, "Rp ")
+                
+                fields["harga_jual"].delete(0, "end")
+                fields["harga_jual"].insert(0, "Rp ")
+                
+                self.path_gambar_baru = ""
+                lbl_gambar.configure(text="Gambar: Tidak ada", text_color="gray")
+                
+                # Arahkan kursor balik ke kolom nama secara otomatis
+                fields["nama"].focus()
+                
+                # Notifikasi singkat yang tidak mengganggu alur kerja
+                messagebox.showinfo("Berhasil", f"'{nama}' tersimpan!\nSilakan lanjut ketik barang berikutnya.")
 
         def batal():
             win.destroy()
 
+        # --- UI TOMBOL DINAMIS ---
         btn_row = ctk.CTkFrame(win, fg_color="transparent")
         btn_row.pack(pady=25, padx=25, fill="x")
-        btn_row.grid_columnconfigure((0, 1), weight=1)
+        
+        # Gunakan pack agar tombol membagi ruang secara otomatis dan rapi
         ctk.CTkButton(btn_row, text="Batal", height=38,
                      fg_color=("#E0E0E0", "#3A3A3A"), hover_color=("#CFCFCF", "#4A4A4A"),
                      text_color=("#333333", "#EAEAEA"),
-                     command=batal).grid(row=0, column=0, sticky="ew", padx=(0, 8))
-        ctk.CTkButton(btn_row, text="Simpan", height=38, fg_color="#D98E3F", hover_color="#BC7A32",
-                     command=simpan).grid(row=0, column=1, sticky="ew", padx=(8, 0))
+                     command=batal).pack(side="left", expand=True, fill="x", padx=(0, 5))
 
-        # Nielsen #7 (flexibility/efficiency): Enter = simpan, Esc = batal
-        win.bind("<Return>", lambda e: simpan())
+        # Tombol "Simpan & Tambah Lagi" HANYA muncul jika sedang menambah barang baru (bukan edit)
+        if not produk:
+            ctk.CTkButton(btn_row, text="Simpan & Tambah Lagi", height=38, 
+                         fg_color="#27ae60", hover_color="#2ecc71",
+                         command=lambda: simpan(tutup_jendela=False)).pack(side="left", expand=True, fill="x", padx=5)
+
+        ctk.CTkButton(btn_row, text="Simpan", height=38, fg_color="#D98E3F", hover_color="#BC7A32",
+                     command=lambda: simpan(tutup_jendela=True)).pack(side="left", expand=True, fill="x", padx=(5, 0))
+
+        # Hotkeys
+        win.bind("<Return>", lambda e: simpan(tutup_jendela=True))
         win.bind("<Escape>", lambda e: batal())
 
         win.update_idletasks()
-        win.geometry(f"380x{win.winfo_reqheight() + 10}")
+        win.geometry(f"420x{win.winfo_reqheight() + 10}") # Lebar ditambah sedikit (420x) agar 3 tombol tidak sempit
 
     def buka_kelola_kategori(self):
         win = ctk.CTkToplevel(self)
