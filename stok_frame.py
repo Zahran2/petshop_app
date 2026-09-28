@@ -27,7 +27,16 @@ class StokFrame(ctk.CTkFrame):
         top.grid_columnconfigure(0, weight=1)
 
         self.search_var = ctk.StringVar()
-        self.search_var.trace_add("write", lambda *a: self.refresh_list())
+        self._timer_pencarian = None
+
+        def jalankan_pencarian(*args):
+            # Batalkan pencarian sebelumnya jika user masih mengetik
+            if self._timer_pencarian:
+                self.after_cancel(self._timer_pencarian)
+            # Jadwalkan pencarian baru 300ms setelah ketikan terakhir berhenti
+            self._timer_pencarian = self.after(300, self.refresh_list)
+
+        self.search_var.trace_add("write", jalankan_pencarian)
         ctk.CTkEntry(top, placeholder_text="🔍  Cari produk...", height=36,
                     textvariable=self.search_var).grid(row=0, column=0, sticky="ew", padx=(0, 10))
         

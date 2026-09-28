@@ -11,13 +11,15 @@ import utils
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "petshop.db")
 
+# Buka koneksi satu kali saja saat aplikasi berjalan (persistent connection).
+# check_same_thread=False diperlukan agar aman diakses oleh UI CustomTkinter.
+GLOBAL_CONN = sqlite3.connect(DB_PATH, check_same_thread=False)
+GLOBAL_CONN.row_factory = sqlite3.Row
+GLOBAL_CONN.execute("PRAGMA foreign_keys = ON")
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
-
+    """Mengembalikan koneksi global yang sudah terbuka."""
+    return GLOBAL_CONN
 
 def init_db():
     conn = get_connection()
@@ -100,7 +102,6 @@ def init_db():
         pass
 
     conn.commit()
-    conn.close()
 
 
 # ---------------- PRODUK ----------------
@@ -114,7 +115,6 @@ def tambah_produk(nama, kategori, harga_beli, harga_jual, stok, satuan="pcs", ga
     )
     id_baru = cur.lastrowid  # Tangkap ID barang yang baru saja masuk
     conn.commit()
-    conn.close()
     return id_baru           # Kembalikan ID tersebut ke aplikasi
 
 def update_produk(produk_id, nama, kategori, harga_beli, harga_jual, stok, satuan, gambar):
@@ -124,14 +124,12 @@ def update_produk(produk_id, nama, kategori, harga_beli, harga_jual, stok, satua
         (nama, kategori, harga_beli, harga_jual, stok, satuan, gambar, produk_id),
     )
     conn.commit()
-    conn.close()
 
 
 def hapus_produk(produk_id):
     conn = get_connection()
     conn.execute("DELETE FROM produk WHERE id=?", (produk_id,))
     conn.commit()
-    conn.close()
 
 
 def get_semua_produk(keyword=None, kategori=None):
@@ -152,13 +150,11 @@ def get_semua_produk(keyword=None, kategori=None):
     query += " ORDER BY nama"
     
     rows = conn.execute(query, params).fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 def get_produk_by_id(produk_id):
     conn = get_connection()
     row = conn.execute("SELECT * FROM produk WHERE id=?", (produk_id,)).fetchone()
-    conn.close()
     return dict(row) if row else None
 
 def cek_nama_produk_ada(nama, produk_id_kecuali=None):
@@ -179,7 +175,6 @@ def cek_nama_produk_ada(nama, produk_id_kecuali=None):
             "SELECT id FROM produk WHERE LOWER(nama) = LOWER(?)", 
             (nama,)
         ).fetchone()
-    conn.close()
     return row is not None
 
 # ---------------- KATEGORI ----------------
@@ -192,12 +187,11 @@ def tambah_kategori(nama):
     except sqlite3.IntegrityError:
         pass  # Abaikan jika nama kategori sudah ada
     finally:
-        conn.close()
+        pass
 
 def get_semua_kategori():
     conn = get_connection()
     rows = conn.execute("SELECT nama FROM kategori ORDER BY nama").fetchall()
-    conn.close()
     return [r["nama"] for r in rows]
 
 def update_kategori(kategori_id, nama_baru):
@@ -212,19 +206,17 @@ def update_kategori(kategori_id, nama_baru):
     except sqlite3.IntegrityError:
         pass # Abaikan jika namanya sudah dipakai kategori lain
     finally:
-        conn.close()
+        pass
 
 def hapus_kategori(kategori_id):
     conn = get_connection()
     conn.execute("DELETE FROM kategori WHERE id=?", (kategori_id,))
     conn.commit()
-    conn.close()
 
 def get_kategori_lengkap():
     """Mengembalikan list of dictionary berisi id dan nama kategori."""
     conn = get_connection()
     rows = conn.execute("SELECT id, nama FROM kategori ORDER BY nama").fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 
@@ -243,10 +235,8 @@ def buat_transaksi(items, dibayar):
     for item in items:
         row = cur.execute("SELECT stok, nama, harga_beli FROM produk WHERE id=?", (item["produk_id"],)).fetchone()
         if row is None:
-            conn.close()
             raise ValueError(f"Produk '{item['nama_produk']}' tidak ditemukan di database")
         if row["stok"] < item["jumlah"]:
-            conn.close()
             raise ValueError(
                 f"Stok '{row['nama']}' tidak cukup - tersedia {row['stok']}, diminta {item['jumlah']}"
             )
@@ -258,7 +248,6 @@ def buat_transaksi(items, dibayar):
     kembalian = dibayar - total
     
     if kembalian < 0:
-        conn.close()
         raise ValueError(
             f"Uang dibayar (Rp {utils.format_ribuan(dibayar)}) kurang dari total (Rp {utils.format_ribuan(total)})"
         )
@@ -288,7 +277,6 @@ def buat_transaksi(items, dibayar):
         cur.execute("UPDATE produk SET stok = stok - ? WHERE id = ?", (item["jumlah"], item["produk_id"]))
 
     conn.commit()
-    conn.close()
     return transaksi_id, total, kembalian
 
 
@@ -313,7 +301,6 @@ def get_riwayat_transaksi(filter_waktu="Semua Waktu"):
     query += " ORDER BY id DESC"
     
     rows = conn.execute(query, params).fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 
@@ -322,7 +309,6 @@ def get_detail_transaksi(transaksi_id):
     rows = conn.execute(
         "SELECT * FROM transaksi_detail WHERE transaksi_id=?", (transaksi_id,)
     ).fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 
@@ -333,7 +319,6 @@ def get_total_penjualan_hari_ini():
         "SELECT COALESCE(SUM(total), 0) as total, COUNT(*) as jumlah FROM transaksi WHERE tanggal LIKE ?",
         (f"{today}%",),
     ).fetchone()
-    conn.close()
     return dict(row)
 
 
@@ -342,7 +327,6 @@ def get_total_penjualan_hari_ini():
 def get_pengaturan(kunci, default=None):
     conn = get_connection()
     row = conn.execute("SELECT nilai FROM pengaturan WHERE kunci=?", (kunci,)).fetchone()
-    conn.close()
     return row["nilai"] if row else default
 
 
@@ -354,4 +338,3 @@ def set_pengaturan(kunci, nilai):
         (kunci, str(nilai)),
     )
     conn.commit()
-    conn.close()

@@ -12,6 +12,7 @@ class KasirFrame(ctk.CTkFrame):
         super().__init__(master, fg_color="transparent")
         self.cart = []  # list of dict: produk_id, nama_produk, harga_satuan, jumlah, stok_tersedia
         self._current_total = 0
+        self.image_cache = {}  # <-- TAMBAHKAN BARIS INI (Wadah memori untuk menyimpan gambar)
         self._build_ui()
         self.refresh_produk_list()
 
@@ -26,7 +27,17 @@ class KasirFrame(ctk.CTkFrame):
         search_frame.grid_columnconfigure(0, weight=1)
 
         self.search_var = ctk.StringVar()
-        self.search_var.trace_add("write", lambda *a: self.refresh_produk_list())
+        
+        self._timer_pencarian = None
+
+        def jalankan_pencarian(*args):
+            # Batalkan pencarian sebelumnya jika user masih mengetik huruf selanjutnya
+            if self._timer_pencarian:
+                self.after_cancel(self._timer_pencarian)
+            # Jadwalkan pencarian baru 300 milidetik setelah ketikan terakhir berhenti
+            self._timer_pencarian = self.after(300, self.refresh_produk_list)
+
+        self.search_var.trace_add("write", jalankan_pencarian)
         
         search_entry = ctk.CTkEntry(search_frame, textvariable=self.search_var, placeholder_text="🔍  Cari produk...", height=38)
         search_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
@@ -112,17 +123,21 @@ class KasirFrame(ctk.CTkFrame):
             row.pack(fill="x", pady=4)
             row.grid_columnconfigure(1, weight=1)
 
-            # --- RENDER GAMBAR ---
+            # --- RENDER GAMBAR DENGAN CACHE ---
             img_path = ""
             if p.get("gambar"):
                 folder_img = os.path.join(os.path.dirname(os.path.abspath(__file__)), "img_produk")
                 img_path = os.path.join(folder_img, p["gambar"])
             
-            # Jika gambar ada di folder, tampilkan. Jika tidak, gunakan kotak abu-abu kosong.
             if img_path and os.path.exists(img_path):
-                pil_img = Image.open(img_path)
-                ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(50, 50))
-                lbl_img = ctk.CTkLabel(row, image=ctk_img, text="")
+                # 1. Cek apakah gambar SUDAH ADA di dalam memori cache
+                if img_path not in self.image_cache:
+                    # 2. Jika belum ada, baru baca dari hardisk dan simpan ke cache
+                    pil_img = Image.open(img_path)
+                    self.image_cache[img_path] = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(50, 50))
+                
+                # 3. Gunakan gambar yang sudah standby di memori
+                lbl_img = ctk.CTkLabel(row, image=self.image_cache[img_path], text="")
             else:
                 lbl_img = ctk.CTkLabel(row, text="🖼️", font=ctk.CTkFont(size=25), width=50, height=50, fg_color="#e0e0e0", corner_radius=6)
             
@@ -144,22 +159,27 @@ class KasirFrame(ctk.CTkFrame):
 
     # ---------- Keranjang ----------
 
-    # ---------- Keranjang ----------
-
     def _update_total_keranjang(self):
         total = sum(item["harga_satuan"] * item["jumlah"] for item in self.cart)
         self.total_label.configure(text=f"Total: {utils.format_rupiah(total)}")
         self._current_total = total
         
         status = "normal" if total > 0 else "disabled"
-        self.bayar_btn.configure(state=status)
-        self.btn_kosongkan.configure(state=status)
+        # KUNCI 1: Jangan lukis ulang tombol jika statusnya memang tidak berubah. (Cegah lag)
+        if self.bayar_btn.cget("state") != status:
+            self.bayar_btn.configure(state=status)
+            self.btn_kosongkan.configure(state=status)
 
     def hapus_dari_cart(self, item):
-        """Menghapus item secara langsung dari keranjang."""
         if item in self.cart:
             self.cart.remove(item)
-            self.refresh_cart()
+            if "ui_row" in item:
+                item["ui_row"].destroy() # Hancurkan satu baris ini saja secara instan
+            
+            if not self.cart:
+                self.refresh_cart() # Jika habis, panggil refresh agar teks "Keranjang kosong" muncul
+            else:
+                self._update_total_keranjang()
 
     def kosongkan_keranjang(self):
         if not self.cart:
@@ -169,6 +189,37 @@ class KasirFrame(ctk.CTkFrame):
             self.cart = []
             self.refresh_cart()
 
+    def _gambar_satu_baris(self, item):
+        row = ctk.CTkFrame(self.cart_scroll, fg_color="transparent")
+        row.pack(fill="x", pady=6)
+        item["ui_row"] = row 
+
+        ctk.CTkLabel(row, text=item["nama_produk"], anchor="w",
+                    font=ctk.CTkFont(size=13)).pack(fill="x")
+
+        ctrl = ctk.CTkFrame(row, fg_color="transparent")
+        ctrl.pack(fill="x")
+        
+        ctk.CTkButton(ctrl, text="-", width=26, height=26,
+                     command=lambda it=item: self.ubah_jumlah(it, -1)).pack(side="left")
+        
+        # KUNCI 2: Skala sudah 100%, kembali pakai StringVar + CTkLabel. Super instan!
+        item["var_jumlah"] = ctk.StringVar(value=str(item["jumlah"]))
+        lbl_jumlah = ctk.CTkLabel(ctrl, textvariable=item["var_jumlah"], width=35, justify="center")
+        lbl_jumlah.pack(side="left")
+        
+        ctk.CTkButton(ctrl, text="+", width=26, height=26,
+                     command=lambda it=item: self.ubah_jumlah(it, 1)).pack(side="left")
+        
+        ctk.CTkButton(ctrl, text="X", width=26, height=26, 
+                     fg_color="#C0392B", hover_color="#922B21", font=ctk.CTkFont(weight="bold"),
+                     command=lambda it=item: self.hapus_dari_cart(it)).pack(side="right")
+                     
+        subtotal = item["harga_satuan"] * item["jumlah"]
+        item["var_subtotal"] = ctk.StringVar(value=utils.format_rupiah(subtotal))
+        lbl_subtotal = ctk.CTkLabel(ctrl, textvariable=item["var_subtotal"], width=110, anchor="e")
+        lbl_subtotal.pack(side="right", padx=(0, 10))
+
     def tambah_ke_cart(self, produk):
         for item in self.cart:
             if item["produk_id"] == produk["id"]:
@@ -177,34 +228,35 @@ class KasirFrame(ctk.CTkFrame):
                     return
                 item["jumlah"] += 1
                 
-                # --- UPDATE INSTAN (Trik Entry Anti-Ghosting) ---
-                item["ui_jumlah"].configure(state="normal")
-                item["ui_jumlah"].delete(0, "end")
-                item["ui_jumlah"].insert(0, str(item["jumlah"]))
-                item["ui_jumlah"].configure(state="disabled")
-                
-                item["ui_subtotal"].configure(state="normal")
-                item["ui_subtotal"].delete(0, "end")
-                item["ui_subtotal"].insert(0, utils.format_rupiah(item["harga_satuan"] * item["jumlah"]))
-                item["ui_subtotal"].configure(state="disabled")
+                # Update teks secara instan (tanpa bongkar pasang frame)
+                if "var_jumlah" in item:
+                    item["var_jumlah"].set(str(item["jumlah"]))
+                    item["var_subtotal"].set(utils.format_rupiah(item["harga_satuan"] * item["jumlah"]))
                 
                 self._update_total_keranjang()
                 return
 
-        self.cart.append({
+        item_baru = {
             "produk_id": produk["id"],
             "nama_produk": produk["nama"],
             "harga_satuan": produk["harga_jual"],
             "jumlah": 1,
             "stok_tersedia": produk["stok"],
-        })
-        self.refresh_cart()
+        }
+        self.cart.append(item_baru)
+        
+        # Hapus label kosong jika ini barang pertama
+        if len(self.cart) == 1:
+            for widget in self.cart_scroll.winfo_children():
+                widget.destroy()
+                
+        self._gambar_satu_baris(item_baru)
+        self._update_total_keranjang()
 
     def ubah_jumlah(self, item, delta):
         baru = item["jumlah"] + delta
         if baru <= 0:
-            self.cart.remove(item)
-            self.refresh_cart() # Refresh full karena ada baris yang harus hilang
+            self.hapus_dari_cart(item)
             return
         elif baru > item["stok_tersedia"]:
             messagebox.showwarning("Stok tidak cukup", "Jumlah melebihi stok yang tersedia")
@@ -212,16 +264,10 @@ class KasirFrame(ctk.CTkFrame):
         else:
             item["jumlah"] = baru
             
-            # --- UPDATE INSTAN (Trik Entry Anti-Ghosting) ---
-            item["ui_jumlah"].configure(state="normal")
-            item["ui_jumlah"].delete(0, "end")
-            item["ui_jumlah"].insert(0, str(item["jumlah"]))
-            item["ui_jumlah"].configure(state="disabled")
-            
-            item["ui_subtotal"].configure(state="normal")
-            item["ui_subtotal"].delete(0, "end")
-            item["ui_subtotal"].insert(0, utils.format_rupiah(item["harga_satuan"] * item["jumlah"]))
-            item["ui_subtotal"].configure(state="disabled")
+            # Update teks secara instan
+            if "var_jumlah" in item:
+                item["var_jumlah"].set(str(item["jumlah"]))
+                item["var_subtotal"].set(utils.format_rupiah(item["harga_satuan"] * item["jumlah"]))
             
             self._update_total_keranjang()
 
@@ -234,55 +280,16 @@ class KasirFrame(ctk.CTkFrame):
                         text_color=("gray50", "gray60")).pack(pady=20)
             self.total_label.configure(text="Total: Rp 0")
             self._current_total = 0
-            self.bayar_btn.configure(state="disabled")
-            self.btn_kosongkan.configure(state="disabled")
+            
+            if self.bayar_btn.cget("state") != "disabled":
+                self.bayar_btn.configure(state="disabled")
+                self.btn_kosongkan.configure(state="disabled")
             return
 
-        total = 0
         for item in self.cart:
-            subtotal = item["harga_satuan"] * item["jumlah"]
-            total += subtotal
+            self._gambar_satu_baris(item)
 
-            row = ctk.CTkFrame(self.cart_scroll, fg_color="transparent")
-            row.pack(fill="x", pady=6)
-
-            ctk.CTkLabel(row, text=item["nama_produk"], anchor="w",
-                        font=ctk.CTkFont(size=13)).pack(fill="x")
-
-            ctrl = ctk.CTkFrame(row, fg_color="transparent")
-            ctrl.pack(fill="x")
-            
-            ctk.CTkButton(ctrl, text="-", width=26, height=26,
-                         command=lambda it=item: self.ubah_jumlah(it, -1)).pack(side="left")
-            
-            # --- UBAH MENJADI ENTRY YANG DISAMARKAN ---
-            lbl_jumlah = ctk.CTkEntry(ctrl, width=35, height=26, fg_color="transparent", 
-                                      border_width=0, justify="center", text_color=("black", "white"))
-            lbl_jumlah.insert(0, str(item["jumlah"]))
-            lbl_jumlah.configure(state="disabled") # Kunci agar terlihat seperti label biasa
-            lbl_jumlah.pack(side="left")
-            item["ui_jumlah"] = lbl_jumlah
-            
-            ctk.CTkButton(ctrl, text="+", width=26, height=26,
-                         command=lambda it=item: self.ubah_jumlah(it, 1)).pack(side="left")
-            
-            ctk.CTkButton(ctrl, text="X", width=26, height=26, 
-                         fg_color="#C0392B", hover_color="#922B21", font=ctk.CTkFont(weight="bold"),
-                         command=lambda it=item: self.hapus_dari_cart(it)).pack(side="right")
-                         
-            # --- UBAH MENJADI ENTRY YANG DISAMARKAN ---
-            lbl_subtotal = ctk.CTkEntry(ctrl, width=110, height=26, fg_color="transparent", 
-                                        border_width=0, justify="right", text_color=("black", "white"))
-            lbl_subtotal.insert(0, utils.format_rupiah(subtotal))
-            lbl_subtotal.configure(state="disabled")
-            lbl_subtotal.pack(side="right", padx=(0, 10))
-            item["ui_subtotal"] = lbl_subtotal
-
-        self.total_label.configure(text=f"Total: {utils.format_rupiah(total)}")
-        self._current_total = total
-        self.bayar_btn.configure(state="normal")
-        self.btn_kosongkan.configure(state="normal")
-
+        self._update_total_keranjang()
     # ---------- Pembayaran ----------
 
     def buka_dialog_bayar(self):
