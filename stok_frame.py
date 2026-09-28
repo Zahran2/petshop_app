@@ -33,8 +33,8 @@ class StokFrame(ctk.CTkFrame):
             # Batalkan pencarian sebelumnya jika user masih mengetik
             if self._timer_pencarian:
                 self.after_cancel(self._timer_pencarian)
-            # Jadwalkan pencarian baru 300ms setelah ketikan terakhir berhenti
-            self._timer_pencarian = self.after(300, self.refresh_list)
+            # Jadwalkan pencarian baru 500ms setelah ketikan terakhir berhenti
+            self._timer_pencarian = self.after(500, self.refresh_list)
 
         self.search_var.trace_add("write", jalankan_pencarian)
         ctk.CTkEntry(top, placeholder_text="🔍  Cari produk...", height=36,
@@ -73,6 +73,12 @@ class StokFrame(ctk.CTkFrame):
 
         self.tree.grid(row=1, column=0, sticky="nsew", pady=(0, 5))
         self.tree.tag_configure("low_stock", background="#FBE0E0")
+
+        self.scrollbar = ctk.CTkScrollbar(self, orientation="vertical", command=self.tree.yview)
+        self.scrollbar.grid(row=1, column=1, sticky="ns", pady=(0, 5))
+        
+        # Hubungkan tabel Treeview dengan Scrollbar
+        self.tree.configure(yscrollcommand=self.scrollbar.set)
 
         info_row = ctk.CTkFrame(self, fg_color="transparent")
         info_row.grid(row=2, column=0, sticky="ew", pady=(5, 0))

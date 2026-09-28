@@ -46,6 +46,11 @@ class RiwayatFrame(ctk.CTkFrame):
         self.tree = ttk.Treeview(self, columns=columns, show="headings", selectmode="browse")
         self._apply_treeview_columns()
         self.tree.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
+        self.scrollbar = ctk.CTkScrollbar(self, orientation="vertical", command=self.tree.yview)
+        self.scrollbar.grid(row=1, column=1, sticky="ns", pady=(0, 5))
+        
+        # Hubungkan tabel Treeview dengan Scrollbar
+        self.tree.configure(yscrollcommand=self.scrollbar.set)
         self.tree.bind("<<TreeviewSelect>>", self.tampilkan_detail)
 
         ctk.CTkLabel(self, text="Detail item transaksi terpilih:", anchor="w",

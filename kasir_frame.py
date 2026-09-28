@@ -22,7 +22,7 @@ class KasirFrame(ctk.CTkFrame):
         self.grid_rowconfigure(1, weight=1)
 
         # --- Kolom kiri: pencarian + daftar produk ---
-        search_frame = ctk.CTkFrame(self, fg_color="transparent")
+        search_frame = ctk.CTkFrame(self, fg_color="#F5F5F5") 
         search_frame.grid(row=0, column=0, sticky="ew", padx=(0, 10), pady=(0, 10))
         search_frame.grid_columnconfigure(0, weight=1)
 
@@ -34,8 +34,8 @@ class KasirFrame(ctk.CTkFrame):
             # Batalkan pencarian sebelumnya jika user masih mengetik huruf selanjutnya
             if self._timer_pencarian:
                 self.after_cancel(self._timer_pencarian)
-            # Jadwalkan pencarian baru 300 milidetik setelah ketikan terakhir berhenti
-            self._timer_pencarian = self.after(300, self.refresh_produk_list)
+            # Jadwalkan pencarian baru 500 milidetik setelah ketikan terakhir berhenti
+            self._timer_pencarian = self.after(500, self.refresh_produk_list)
 
         self.search_var.trace_add("write", jalankan_pencarian)
         
@@ -119,7 +119,7 @@ class KasirFrame(ctk.CTkFrame):
             return
 
         for p in produk_list:
-            row = ctk.CTkFrame(self.produk_scroll, corner_radius=8)
+            row = ctk.CTkFrame(self.produk_scroll, corner_radius=8, fg_color="#FFFFFF")
             row.pack(fill="x", pady=4)
             row.grid_columnconfigure(1, weight=1)
 
@@ -433,5 +433,5 @@ class KasirFrame(ctk.CTkFrame):
         # Posisikan melayang (floating) di tengah atas layar
         toast.place(relx=0.5, rely=0.05, anchor="n")
         
-        # Perintahkan aplikasi untuk menghancurkan (menghapus) toast ini setelah 3000 ms (3 detik)
+        # Perintahkan aplikasi untuk menghancurkan (menghapus) toast ini setelah 5000 ms (5 detik)
         self.after(5000, toast.destroy)
