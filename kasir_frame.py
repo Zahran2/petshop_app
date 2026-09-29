@@ -19,8 +19,9 @@ class KasirFrame(ctk.CTkFrame):
         self.refresh_produk_list()
 
     def _build_ui(self):
-        self.grid_columnconfigure(0, weight=2)
-        self.grid_columnconfigure(1, weight=1)
+        # Tambahkan uniform="grup1" untuk mengunci mutlak rasio 2:1
+        self.grid_columnconfigure(0, weight=2, uniform="grup1")
+        self.grid_columnconfigure(1, weight=1, uniform="grup1")
         self.grid_rowconfigure(1, weight=1)
 
         # --- Kolom kiri: pencarian + daftar produk ---
@@ -89,18 +90,21 @@ class KasirFrame(ctk.CTkFrame):
         bottom_bar.grid(row=2, column=0, sticky="ew", padx=15, pady=(10, 5))
         bottom_bar.grid_columnconfigure(0, weight=1)
 
-        self.total_label = ctk.CTkLabel(bottom_bar, text="Total: Rp 0",
-                                          font=ctk.CTkFont(size=19, weight="bold"),
-                                          width=250, anchor="w") # <-- Tambahkan width dan anchor di sini
-        self.total_label.grid(row=0, column=0, sticky="w")
-
+        # Urutan 1: Tombol Kosongkan Keranjang (di baris atas, rata kanan)
         self.btn_kosongkan = ctk.CTkButton(
             bottom_bar, text="🗑️ Kosongkan Keranjang", width=80, height=28, 
             fg_color="transparent", text_color="#C0392B", hover_color="#FADBD8",
             font=ctk.CTkFont(size=12, weight="bold"), 
             command=self.kosongkan_keranjang
         )
-        self.btn_kosongkan.grid(row=0, column=1, sticky="e")
+        self.btn_kosongkan.grid(row=0, column=0, sticky="e", pady=(0, 4))
+
+        # Urutan 2: Total Harga (di baris bawah, rata kiri)
+        # Font sedikit dibesarkan (size 22) karena sekarang ruang horizontalnya lega
+        self.total_label = ctk.CTkLabel(bottom_bar, text="Total: Rp 0",
+                                          font=ctk.CTkFont(size=22, weight="bold"),
+                                          anchor="w")
+        self.total_label.grid(row=1, column=0, sticky="w", pady=(4, 5))
 
         # Hapus state="disabled"
         self.bayar_btn = ctk.CTkButton(
