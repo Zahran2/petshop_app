@@ -26,11 +26,11 @@ class App(ctk.CTk):
 
         # Muat skala teks yang tersimpan (kalau ada) SEBELUM widget dibikin,
         # biar langsung tampil di ukuran yang bener dari awal, gak "lompat".
-        # utils.skala_teks = float(db.get_pengaturan("skala_teks", "1.0"))
-        # ctk.set_widget_scaling(utils.skala_teks)
+        utils.skala_teks = float(db.get_pengaturan("skala_teks", "1.0"))
+        ctk.set_widget_scaling(utils.skala_teks)
 
-        utils.skala_teks = 1.0
-        ctk.set_widget_scaling(1.0)
+        # utils.skala_teks = 1.0
+        # ctk.set_widget_scaling(1.0)
 
         self.title("Kasir & Stok - Petshop")
         self.geometry("1050x680")
@@ -67,35 +67,35 @@ class App(ctk.CTk):
 
         # Kontrol ukuran teks - ditaruh di BAWAH sidebar (side="bottom") biar
         # selalu keliatan di layar mana pun, gak ketiban menu navigasi.
-        # skala_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        # skala_frame.pack(side="bottom", fill="x", padx=15, pady=20)
+        skala_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        skala_frame.pack(side="bottom", fill="x", padx=15, pady=20)
 
-        # ctk.CTkLabel(skala_frame, text="Ukuran Teks", font=ctk.CTkFont(size=11),
-        #             text_color=("gray40", "gray65")).pack(anchor="w", pady=(0, 6))
+        ctk.CTkLabel(skala_frame, text="Ukuran Teks", font=ctk.CTkFont(size=11),
+                    text_color=("gray40", "gray65")).pack(anchor="w", pady=(0, 6))
 
-        # tombol_row = ctk.CTkFrame(skala_frame, fg_color="transparent")
-        # tombol_row.pack(fill="x")
-        # tombol_row.grid_columnconfigure((0, 1, 2), weight=1)
+        tombol_row = ctk.CTkFrame(skala_frame, fg_color="transparent")
+        tombol_row.pack(fill="x")
+        tombol_row.grid_columnconfigure((0, 1, 2), weight=1)
 
-        # self.btn_kecil = ctk.CTkButton(tombol_row, text="A-", width=44, height=34,
-        #                                 font=ctk.CTkFont(size=13),
-        #                                 command=self.perkecil_teks)
-        # self.btn_kecil.grid(row=0, column=0, padx=(0, 4))
+        self.btn_kecil = ctk.CTkButton(tombol_row, text="A-", width=44, height=34,
+                                        font=ctk.CTkFont(size=13),
+                                        command=self.perkecil_teks)
+        self.btn_kecil.grid(row=0, column=0, padx=(0, 4))
 
-        # self.skala_label = ctk.CTkLabel(tombol_row, text="100%", font=ctk.CTkFont(size=12),
-        #                                  text_color=("gray30", "gray80"))
-        # self.skala_label.grid(row=0, column=1)
-        # self.skala_label.bind("<Button-1>", lambda e: self.reset_skala())
+        self.skala_label = ctk.CTkLabel(tombol_row, text="100%", font=ctk.CTkFont(size=12),
+                                         text_color=("gray30", "gray80"))
+        self.skala_label.grid(row=0, column=1)
+        self.skala_label.bind("<Button-1>", lambda e: self.reset_skala())
 
-        # self.btn_besar = ctk.CTkButton(tombol_row, text="A+", width=44, height=34,
-        #                                 font=ctk.CTkFont(size=15),
-        #                                 command=self.perbesar_teks)
-        # self.btn_besar.grid(row=0, column=2, padx=(4, 0))
+        self.btn_besar = ctk.CTkButton(tombol_row, text="A+", width=44, height=34,
+                                        font=ctk.CTkFont(size=15),
+                                        command=self.perbesar_teks)
+        self.btn_besar.grid(row=0, column=2, padx=(4, 0))
 
-        # ctk.CTkLabel(skala_frame, text="Klik angka % buat reset", font=ctk.CTkFont(size=10),
-        #             text_color=("gray55", "gray50")).pack(anchor="w", pady=(4, 0))
+        ctk.CTkLabel(skala_frame, text="Klik angka % buat reset", font=ctk.CTkFont(size=10),
+                    text_color=("gray55", "gray50")).pack(anchor="w", pady=(4, 0))
 
-        # self._perbarui_kontrol_skala()
+        self._perbarui_kontrol_skala()
 
     def _build_content(self):
         self.container = ctk.CTkFrame(self, fg_color="transparent")
@@ -112,27 +112,28 @@ class App(ctk.CTk):
             frame.grid(row=0, column=0, sticky="nsew")
 
     def tampilkan(self, key):
-        # 1. Cegah proses ulang jika mengklik menu yang memang sudah terbuka (menghemat memori)
+        # 1. Cegah proses ulang jika mengklik menu yang memang sudah terbuka
         if hasattr(self, "_menu_saat_ini") and self._menu_saat_ini == key:
             return
         self._menu_saat_ini = key
 
-        # 2. Pindahkan layar ke depan seketika itu juga!
-        self.frames[key].tkraise()
-
-        # 3. Ubah warna tombol yang aktif tanpa tertahan proses lain
+        # 2. Ubah warna tombol yang aktif
         for k, btn in self.buttons.items():
             is_active = (k == key)
             btn.configure(fg_color=("#E8C9A0", "#5A4527") if is_active else "transparent")
 
-        # 4. Trik Jeda Mikro: Biarkan antarmuka merespons klik dulu, 
-        # baru muat datanya 50 milidetik kemudian.
+        # 3. REFRESH DATA SECARA LANGSUNG (Tanpa delay 50ms)
+        # Karena kita sudah pakai sistem Cache Gambar, proses ini sekarang sangat instan!
         if key == "riwayat":
-            self.after(50, self.frames["riwayat"].refresh)
+            self.frames["riwayat"].refresh()
         elif key == "stok":
-            self.after(50, self.frames["stok"].refresh_list)
+            self.frames["stok"].refresh_list()
         elif key == "kasir":
-            self.after(50, self.frames["kasir"].refresh_produk_list)
+            self.frames["kasir"].refresh_produk_list()
+
+        # 4. Pindahkan layar ke depan SETELAH data selesai dirakit di belakang layar
+        # Hasilnya: Layar muncul seketika dalam keadaan sudah sempurna tanpa glitch sedikit pun!
+        self.frames[key].tkraise()
 
     def _perbarui_kontrol_skala(self):
         self.skala_label.configure(text=f"{round(utils.skala_teks * 100)}%")

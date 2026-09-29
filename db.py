@@ -132,10 +132,8 @@ def hapus_produk(produk_id):
     conn.commit()
 
 
-def get_semua_produk(keyword=None, kategori=None):
+def get_semua_produk(keyword=None, kategori=None, limit=None, offset=0):
     conn = get_connection()
-    
-    # Gunakan 1=1 agar mudah menambahkan kondisi AND selanjutnya
     query = "SELECT * FROM produk WHERE 1=1"
     params = []
     
@@ -149,8 +147,30 @@ def get_semua_produk(keyword=None, kategori=None):
         
     query += " ORDER BY nama"
     
+    # Terapkan pembatasan (limit & offset) HANYA jika diminta oleh layar Kasir
+    if limit is not None:
+        query += " LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        
     rows = conn.execute(query, params).fetchall()
     return [dict(r) for r in rows]
+
+def count_semua_produk(keyword=None, kategori=None):
+    """Menghitung total barang untuk menentukan jumlah halaman (Pagination)"""
+    conn = get_connection()
+    query = "SELECT COUNT(*) as total FROM produk WHERE 1=1"
+    params = []
+    
+    if keyword:
+        query += " AND nama LIKE ?"
+        params.append(f"%{keyword}%")
+        
+    if kategori and kategori != "Semua Kategori":
+        query += " AND kategori = ?"
+        params.append(kategori)
+        
+    total = conn.execute(query, params).fetchone()["total"]
+    return total
 
 def get_produk_by_id(produk_id):
     conn = get_connection()

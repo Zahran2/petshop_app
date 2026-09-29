@@ -13,6 +13,8 @@ class KasirFrame(ctk.CTkFrame):
         self.cart = []  # list of dict: produk_id, nama_produk, harga_satuan, jumlah, stok_tersedia
         self._current_total = 0
         self.image_cache = {}  # <-- TAMBAHKAN BARIS INI (Wadah memori untuk menyimpan gambar)
+        self.halaman_sekarang = 1
+        self.batas_per_halaman = 10
         self._build_ui()
         self.refresh_produk_list()
 
@@ -31,10 +33,9 @@ class KasirFrame(ctk.CTkFrame):
         self._timer_pencarian = None
 
         def jalankan_pencarian(*args):
-            # Batalkan pencarian sebelumnya jika user masih mengetik huruf selanjutnya
+            self.halaman_sekarang = 1 # Reset ke halaman 1 saat mengetik
             if self._timer_pencarian:
                 self.after_cancel(self._timer_pencarian)
-            # Jadwalkan pencarian baru 500 milidetik setelah ketikan terakhir berhenti
             self._timer_pencarian = self.after(500, self.refresh_produk_list)
 
         self.search_var.trace_add("write", jalankan_pencarian)
@@ -42,15 +43,32 @@ class KasirFrame(ctk.CTkFrame):
         search_entry = ctk.CTkEntry(search_frame, textvariable=self.search_var, placeholder_text="🔍  Cari produk...", height=38)
         search_entry.grid(row=0, column=0, sticky="ew", padx=(0, 8))
 
+        # Reset ke halaman 1 saat kategori diubah
+        def ganti_kategori(pilihan):
+            self.halaman_sekarang = 1
+            self.refresh_produk_list()
+
         self.filter_kat_var = ctk.StringVar(value="Semua Kategori")
         self.filter_kat_combo = ctk.CTkComboBox(
             search_frame, variable=self.filter_kat_var, width=140, height=38,
-            command=lambda e: self.refresh_produk_list()
+            command=ganti_kategori
         )
         self.filter_kat_combo.grid(row=0, column=1)
 
         self.produk_scroll = ctk.CTkScrollableFrame(self, label_text="Daftar Produk")
         self.produk_scroll.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
+
+        self.page_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.page_frame.grid(row=2, column=0, sticky="ew", padx=(0, 10), pady=(5, 10))
+        
+        self.btn_prev = ctk.CTkButton(self.page_frame, text="< Sebelumnya", width=110, command=self.halaman_sebelumnya)
+        self.btn_prev.pack(side="left")
+        
+        self.lbl_page = ctk.CTkLabel(self.page_frame, text="Hal 1 / 1", font=ctk.CTkFont(weight="bold"))
+        self.lbl_page.pack(side="left", expand=True)
+        
+        self.btn_next = ctk.CTkButton(self.page_frame, text="Selanjutnya >", width=110, command=self.halaman_selanjutnya)
+        self.btn_next.pack(side="right")
 
         # --- Kolom kanan: keranjang ---
         cart_panel = ctk.CTkFrame(self, corner_radius=12)
@@ -72,27 +90,28 @@ class KasirFrame(ctk.CTkFrame):
         bottom_bar.grid_columnconfigure(0, weight=1)
 
         self.total_label = ctk.CTkLabel(bottom_bar, text="Total: Rp 0",
-                                          font=ctk.CTkFont(size=19, weight="bold"))
+                                          font=ctk.CTkFont(size=19, weight="bold"),
+                                          width=250, anchor="w") # <-- Tambahkan width dan anchor di sini
         self.total_label.grid(row=0, column=0, sticky="w")
 
         self.btn_kosongkan = ctk.CTkButton(
             bottom_bar, text="🗑️ Kosongkan Keranjang", width=80, height=28, 
             fg_color="transparent", text_color="#C0392B", hover_color="#FADBD8",
-            font=ctk.CTkFont(size=12, weight="bold"), state="disabled",
+            font=ctk.CTkFont(size=12, weight="bold"), 
             command=self.kosongkan_keranjang
         )
         self.btn_kosongkan.grid(row=0, column=1, sticky="e")
 
-        # Nielsen #5 (visibility) + #5 error prevention: tombol nonaktif kalau keranjang kosong,
-        # jadi user langsung tahu belum bisa lanjut tanpa perlu coba klik dulu.
+        # Hapus state="disabled"
         self.bayar_btn = ctk.CTkButton(
             cart_panel, text="Bayar", height=46, corner_radius=10,
             fg_color="#D98E3F", hover_color="#BC7A32",
             font=ctk.CTkFont(size=15, weight="bold"),
-            state="disabled",
             command=self.buka_dialog_bayar,
         )
         self.bayar_btn.grid(row=3, column=0, sticky="ew", padx=15, pady=(0, 15))
+
+        self._update_total_keranjang()
 
     # ---------- Daftar produk ----------
 
@@ -100,22 +119,46 @@ class KasirFrame(ctk.CTkFrame):
         daftar_kat = db.get_semua_kategori()
         self.filter_kat_combo.configure(values=["Semua Kategori"] + daftar_kat)
 
+    def halaman_sebelumnya(self):
+        if self.halaman_sekarang > 1:
+            self.halaman_sekarang -= 1
+            self.refresh_produk_list()
+
+    def halaman_selanjutnya(self):
+        if self.halaman_sekarang < self.total_halaman:
+            self.halaman_sekarang += 1
+            self.refresh_produk_list()
+
     def refresh_produk_list(self):
-        # Selalu pastikan daftar dropdown kategori update dengan data terbaru
         self.refresh_kategori_filter()
         
         for widget in self.produk_scroll.winfo_children():
             widget.destroy()
 
         keyword = self.search_var.get()
-        kategori = self.filter_kat_var.get() # Ambil kategori yang sedang dipilih
+        kategori = self.filter_kat_var.get() 
         
-        # Kirim keyword dan kategori ke database
-        produk_list = db.get_semua_produk(keyword, kategori)
+        # --- HITUNG TOTAL HALAMAN ---
+        import math
+        total_data = db.count_semua_produk(keyword, kategori)
+        self.total_halaman = math.ceil(total_data / self.batas_per_halaman)
+        if self.total_halaman == 0:
+            self.total_halaman = 1
+            
+        if self.halaman_sekarang > self.total_halaman:
+            self.halaman_sekarang = self.total_halaman
+            
+        # Update teks pagination dan kunci tombol jika mentok
+        self.lbl_page.configure(text=f"Halaman {self.halaman_sekarang} dari {self.total_halaman}")
+        self.btn_prev.configure(state="normal" if self.halaman_sekarang > 1 else "disabled")
+        self.btn_next.configure(state="normal" if self.halaman_sekarang < self.total_halaman else "disabled")
+
+        # --- AMBIL 30 BARANG UNTUK HALAMAN SAAT INI ---
+        offset = (self.halaman_sekarang - 1) * self.batas_per_halaman
+        produk_list = db.get_semua_produk(keyword, kategori, limit=self.batas_per_halaman, offset=offset)
 
         if not produk_list:
-            ctk.CTkLabel(self.produk_scroll, text="Produk tidak ditemukan.",
-                         text_color=("gray50", "gray60")).pack(pady=20)
+            ctk.CTkLabel(self.produk_scroll, text="Produk tidak ditemukan.", text_color=("gray50", "gray60")).pack(pady=20)
             return
 
         for p in produk_list:
@@ -164,11 +207,17 @@ class KasirFrame(ctk.CTkFrame):
         self.total_label.configure(text=f"Total: {utils.format_rupiah(total)}")
         self._current_total = total
         
-        status = "normal" if total > 0 else "disabled"
-        # KUNCI 1: Jangan lukis ulang tombol jika statusnya memang tidak berubah. (Cegah lag)
-        if self.bayar_btn.cget("state") != status:
-            self.bayar_btn.configure(state=status)
-            self.btn_kosongkan.configure(state=status)
+        # --- TRIK UX: FAKE DISABLED STATE ---
+        if len(self.cart) > 0:
+            # Tampilan Aktif (Menyala)
+            self.bayar_btn.configure(fg_color="#D98E3F", hover_color="#BC7A32", text_color="white")
+            if hasattr(self, 'btn_kosongkan'):
+                self.btn_kosongkan.configure(text_color="#C0392B", hover_color="#FADBD8")
+        else:
+            # Tampilan Nonaktif (Abu-abu pudar)
+            self.bayar_btn.configure(fg_color="#E0E0E0", hover_color="#E0E0E0", text_color="#A0A0A0")
+            if hasattr(self, 'btn_kosongkan'):
+                self.btn_kosongkan.configure(text_color="#A0A0A0", hover_color="#EBEBEB")
 
     def hapus_dari_cart(self, item):
         if item in self.cart:
@@ -278,18 +327,17 @@ class KasirFrame(ctk.CTkFrame):
         if not self.cart:
             ctk.CTkLabel(self.cart_scroll, text="Keranjang masih kosong",
                         text_color=("gray50", "gray60")).pack(pady=20)
-            self.total_label.configure(text="Total: Rp 0")
-            self._current_total = 0
             
-            if self.bayar_btn.cget("state") != "disabled":
-                self.bayar_btn.configure(state="disabled")
-                self.btn_kosongkan.configure(state="disabled")
+            # --- KUNCI PERBAIKAN ---
+            # Wajib dipanggil agar sistem mengubah warna tombol jadi abu-abu
+            self._update_total_keranjang() 
             return
 
         for item in self.cart:
             self._gambar_satu_baris(item)
 
         self._update_total_keranjang()
+        
     # ---------- Pembayaran ----------
 
     def buka_dialog_bayar(self):
