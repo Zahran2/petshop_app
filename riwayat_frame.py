@@ -145,13 +145,28 @@ class RiwayatFrame(ctk.CTkFrame):
             with open(filepath, mode="w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 
-                # Tulis Header
+                # 1. Tulis Header bawaan tabel, ditambah 1 Header baru khusus rincian barang
                 headers = [self.tree.heading(col)["text"] for col in self.tree["columns"]]
+                headers.append("Detail Barang")
                 writer.writerow(headers)
 
-                # Tulis Data
+                # 2. Tarik dan tulis data baris demi baris
                 for row_id in self.tree.get_children():
-                    row_data = self.tree.item(row_id)["values"]
+                    # Ambil data ringkasan dari layar (Waktu, Total, Profit, dll)
+                    row_data = list(self.tree.item(row_id)["values"])
+                    
+                    # Karena iid baris adalah ID transaksi, kita ubah kembali jadi angka
+                    trans_id = int(row_id)
+                    
+                    # Tarik rincian barang dari database berdasarkan ID transaksi tersebut
+                    detail_items = db.get_detail_transaksi(trans_id)
+                    
+                    # Rangkai barang jadi teks rapi, contoh: "Baki Pasir (x1), Whiskas (x2)"
+                    teks_detail = ", ".join([f"{d['nama_produk']} (x{d['jumlah']})" for d in detail_items])
+                    
+                    # Sisipkan teks rincian tersebut ke kolom paling akhir
+                    row_data.append(teks_detail)
+
                     writer.writerow(row_data)
 
             messagebox.showinfo("Berhasil", f"Data riwayat berhasil diexport ke:\n{filepath}")
