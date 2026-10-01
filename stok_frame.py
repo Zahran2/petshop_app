@@ -15,6 +15,8 @@ BATAS_STOK_MENIPIS = 5
 class StokFrame(ctk.CTkFrame):
     def __init__(self, master):
         super().__init__(master, fg_color="transparent")
+        self._current_sort_col = None
+        self._current_sort_reverse = False
         self._build_ui()
         self.refresh_list()
 
@@ -113,42 +115,39 @@ class StokFrame(ctk.CTkFrame):
         for col, teks in self._kolom_headings.items():
             # Tambahkan command agar saat diklik memicu fungsi sorting
             self.tree.heading(col, text=teks, command=lambda c=col: self._sort_by_kolom(c, False))
-            anchor = "e" if col == "harga" else ("center" if col in ("stok", "satuan") else "w")
+            anchor = "e" if col in ("harga_beli", "harga_jual") else ("center" if col in ("stok", "satuan") else "w")
             self.tree.column(col, width=utils.ukuran(self._kolom_widths[col]), anchor=anchor)
 
-    def _sort_by_kolom(self, col, reverse):
-        # Ambil semua data (nilai dan ID baris) dari Treeview
+    def _sort_by_kolom(self, col, reverse, toggle=True):
+        self._current_sort_col = col
+        self._current_sort_reverse = reverse
+        
         data_list = [(self.tree.set(k, col), k) for k in self.tree.get_children("")]
         
-        # Fungsi khusus untuk mengonversi tipe data sebelum diurutkan
         def parse_data(val):
-            if col == "harga":
-                # Ambil hanya angka murninya saja (hapus 'Rp ' dan titik)
+            if col in ("harga_beli", "harga_jual"):
                 bersih = "".join(c for c in val if c.isdigit())
                 return int(bersih) if bersih else 0
             elif col == "stok":
                 return int(val) if val.isdigit() else 0
             else:
-                # Untuk teks, ubah jadi huruf kecil semua agar sortingnya konsisten (A-Z)
                 return val.lower()
 
-        # Urutkan data berdasarkan konversi tipe datanya
         data_list.sort(key=lambda t: parse_data(t[0]), reverse=reverse)
 
-        # Geser ulang posisi baris di dalam UI (sangat ringan karena tidak query database)
         for index, (_, k) in enumerate(data_list):
             self.tree.move(k, "", index)
 
-        # Update fungsi di judul kolom agar klik berikutnya membalik urutan (Ascending/Descending)
-        self.tree.heading(col, command=lambda c=col: self._sort_by_kolom(c, not reverse))
+        next_reverse = not reverse if toggle else reverse
+        self.tree.heading(col, command=lambda c=col: self._sort_by_kolom(c, next_reverse, toggle=True))
         
-        # Tambahkan indikator panah ▲ / ▼ di judul yang sedang diklik (opsional UX)
         for c, teks in self._kolom_headings.items():
+            clean_teks = teks.replace(" ▼", "").replace(" ▲", "")
             if c == col:
                 panah = " ▼" if reverse else " ▲"
-                self.tree.heading(c, text=teks + panah)
+                self.tree.heading(c, text=clean_teks + panah)
             else:
-                self.tree.heading(c, text=teks)
+                self.tree.heading(c, text=clean_teks)
 
     def refresh_style(self):
         """Dipanggil dari main.py pas skala teks diubah - ttk.Treeview gak
@@ -187,6 +186,10 @@ class StokFrame(ctk.CTkFrame):
                 tags=(tag,) if tag else (),
             )
 
+        # Jika sebelumnya user sedang melakukan sorting berdasarkan kolom tertentu, terapkan kembali secara otomatis
+        if self._current_sort_col:
+            self._sort_by_kolom(self._current_sort_col, self._current_sort_reverse, toggle=False)
+            
         # --- TAMBAHKAN LOGIKA HIGHLIGHT DI SINI (Di luar/bawah loop for) ---
         if highlight_id:
             item_id = str(highlight_id)
@@ -251,7 +254,25 @@ class StokFrame(ctk.CTkFrame):
 
         win = ctk.CTkToplevel(self)
         win.title("Edit Produk" if produk else "Tambah Produk")
-        win.resizable(False, True)
+        
+        # --- TRIK MENGUNCI POSISI POP-UP DI TENGAH LAYAR ---
+        win.update_idletasks() # Wajib dipanggil agar sistem siap menghitung dimensi
+        
+        lebar_popup = 520
+        tinggi_popup = 720 # Sesuaikan angka tinggi ini jika form-mu masih terpotong/terlalu panjang
+        
+        # Baca resolusi layar laptop secara otomatis
+        lebar_layar = win.winfo_screenwidth()
+        tinggi_layar = win.winfo_screenheight()
+        
+        # Hitung titik koordinat X dan Y
+        x = (lebar_layar // 2) - (lebar_popup // 2)
+        # Kita kurangi sedikit koordinat Y (misal -20) agar posisi pop-up sedikit lebih naik ke atas
+        # Ini sangat berguna agar tombol bawah aman dari halangan Taskbar Windows
+        y = (tinggi_layar // 2) - (tinggi_popup // 2) - 20
+
+        # Terapkan ukuran (lebar x tinggi) sekaligus posisi layar (+X+Y)
+        win.geometry(f"{lebar_popup}x{tinggi_popup}+{x}+{y}")
         win.grab_set()
 
         labels = [
@@ -485,7 +506,6 @@ class StokFrame(ctk.CTkFrame):
         win.bind("<Escape>", lambda e: batal())
 
         win.update_idletasks()
-        win.geometry(f"420x{win.winfo_reqheight() + 10}") # Lebar ditambah sedikit (420x) agar 3 tombol tidak sempit
 
     def buka_kelola_kategori(self):
         win = ctk.CTkToplevel(self)

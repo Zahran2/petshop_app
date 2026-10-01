@@ -145,7 +145,8 @@ def get_semua_produk(keyword=None, kategori=None, limit=None, offset=0):
         query += " AND kategori = ?"
         params.append(kategori)
         
-    query += " ORDER BY nama"
+    # Tambahkan fungsi LOWER() agar huruf besar dan kecil disetarakan saat diurutkan
+    query += " ORDER BY LOWER(nama)"
     
     # Terapkan pembatasan (limit & offset) HANYA jika diminta oleh layar Kasir
     if limit is not None:
