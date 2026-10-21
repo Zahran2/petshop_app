@@ -9,14 +9,17 @@ import utils
 from kasir_frame import KasirFrame
 from stok_frame import StokFrame
 from riwayat_frame import RiwayatFrame
+from dashboard_frame import DashboardFrame  # <-- Import frame dashboard
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("green")
 
+# --- TETAPKAN STRUKTUR AWAL DENGAN MENAMBAHKAN DASHBOARD ---
 MENU_ITEMS = [
     ("kasir", "🛒  Kasir"),
     ("stok", "📦  Stok"),
-    ("riwayat", "🧾  Riwayat"),
+    ("riwayat", "📜  Riwayat"),
+    ("dashboard", "📊  Dashboard"),  # <-- Tambahkan item ini saja
 ]
 
 
@@ -28,9 +31,6 @@ class App(ctk.CTk):
         # biar langsung tampil di ukuran yang bener dari awal, gak "lompat".
         utils.skala_teks = float(db.get_pengaturan("skala_teks", "1.0"))
         ctk.set_widget_scaling(utils.skala_teks)
-
-        # utils.skala_teks = 1.0
-        # ctk.set_widget_scaling(1.0)
 
         self.title("Kasir & Stok - Petshop")
         self.geometry("1050x680")
@@ -44,6 +44,7 @@ class App(ctk.CTk):
         self.tampilkan("kasir")
 
     def _build_sidebar(self):
+        # KODE ASLI / AWAL TIDAK DIUBAH SAMA SEKALI
         sidebar = ctk.CTkFrame(self, width=190, corner_radius=0)
         sidebar.grid(row=0, column=0, sticky="nsw")
         sidebar.grid_propagate(False)
@@ -65,8 +66,7 @@ class App(ctk.CTk):
             btn.pack(fill="x", padx=15, pady=4)
             self.buttons[key] = btn
 
-        # Kontrol ukuran teks - ditaruh di BAWAH sidebar (side="bottom") biar
-        # selalu keliatan di layar mana pun, gak ketiban menu navigasi.
+        # Kontrol ukuran teks - ditaruh di BAWAH sidebar
         skala_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
         skala_frame.pack(side="bottom", fill="x", padx=15, pady=20)
 
@@ -107,32 +107,30 @@ class App(ctk.CTk):
             "kasir": KasirFrame(self.container),
             "stok": StokFrame(self.container),
             "riwayat": RiwayatFrame(self.container),
+            "dashboard": DashboardFrame(self.container),  # <-- Daftarkan frame dashboard
         }
         for frame in self.frames.values():
             frame.grid(row=0, column=0, sticky="nsew")
 
     def tampilkan(self, key):
-        # 1. Cegah proses ulang jika mengklik menu yang memang sudah terbuka
         if hasattr(self, "_menu_saat_ini") and self._menu_saat_ini == key:
             return
         self._menu_saat_ini = key
 
-        # 2. Ubah warna tombol yang aktif
+        # Warna tombol aktif tetap sesuai style awal (#E8C9A0)
         for k, btn in self.buttons.items():
             is_active = (k == key)
             btn.configure(fg_color=("#E8C9A0", "#5A4527") if is_active else "transparent")
 
-        # 3. REFRESH DATA SECARA LANGSUNG (Tanpa delay 50ms)
-        # Karena kita sudah pakai sistem Cache Gambar, proses ini sekarang sangat instan!
         if key == "riwayat":
             self.frames["riwayat"].refresh()
         elif key == "stok":
             self.frames["stok"].refresh_list()
         elif key == "kasir":
             self.frames["kasir"].refresh_produk_list()
+        elif key == "dashboard":
+            self.frames["dashboard"].refresh_dashboard()  # <-- Refresh data dashboard saat diklik
 
-        # 4. Pindahkan layar ke depan SETELAH data selesai dirakit di belakang layar
-        # Hasilnya: Layar muncul seketika dalam keadaan sudah sempurna tanpa glitch sedikit pun!
         self.frames[key].tkraise()
 
     def _perbarui_kontrol_skala(self):
@@ -148,8 +146,6 @@ class App(ctk.CTk):
         ctk.set_widget_scaling(skala_baru)
         db.set_pengaturan("skala_teks", skala_baru)
         self._perbarui_kontrol_skala()
-        # ttk.Treeview (tabel Stok & Riwayat) gak ikut ke-scale otomatis sama
-        # CustomTkinter, jadi perlu di-refresh manual.
         self.frames["stok"].refresh_style()
         self.frames["riwayat"].refresh_style()
 
