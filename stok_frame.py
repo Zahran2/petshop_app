@@ -63,13 +63,12 @@ class StokFrame(ctk.CTkFrame):
         # 3. Panggil fungsi refresh filter saat UI pertama kali dibentuk
         self.refresh_kategori_filter()
 
-        self._kolom_headings = {"nama": "Nama Produk", "kategori": "Kategori", "harga_beli": "Harga Modal", "harga_jual": "Harga Jual", "stok": "Stok", "satuan": "Satuan"}
+        self._kolom_headings = {"nama": "Nama Produk", "kategori": "Kategori", "harga_beli": "Harga Modal", "harga_jual": "Harga Jual", "stok": "Stok", "satuan": "Satuan", "expired_date": "Expired"}
         
-        # Atur lebar kolom agar muat
-        self._kolom_widths = {"nama": 200, "kategori": 120, "harga_beli": 110, "harga_jual": 110, "stok": 70, "satuan": 80}
+        self._kolom_widths = {"nama": 200, "kategori": 120, "harga_beli": 110, "harga_jual": 110, "stok": 70, "satuan": 80, "expired_date": 90}
 
         self._apply_treeview_style()
-        columns = ("nama", "kategori", "harga_beli", "harga_jual", "stok", "satuan")
+        columns = ("nama", "kategori", "harga_beli", "harga_jual", "stok", "satuan", "expired_date")
         self.tree = ttk.Treeview(self, columns=columns, show="headings", selectmode="browse")
         self._apply_treeview_columns()
 
@@ -182,7 +181,7 @@ class StokFrame(ctk.CTkFrame):
             tag = "low_stock" if p["stok"] <= BATAS_STOK_MENIPIS else ""
             self.tree.insert(
                 "", "end", iid=str(p["id"]),
-                values=(p["nama"], p["kategori"], utils.format_rupiah(p["harga_beli"]), utils.format_rupiah(p["harga_jual"]), p["stok"], p["satuan"]),
+                values=(p["nama"], p["kategori"], utils.format_rupiah(p["harga_beli"]), utils.format_rupiah(p["harga_jual"]), p["stok"], p["satuan"], p.get("expired_date", "")),
                 tags=(tag,) if tag else (),
             )
 
@@ -275,6 +274,13 @@ class StokFrame(ctk.CTkFrame):
         win.geometry(f"{lebar_popup}x{tinggi_popup}+{x}+{y}")
         win.grab_set()
 
+        # --- AWAL PERUBAHAN 1: Buat Area Tombol & Scroll ---
+        bottom_area = ctk.CTkFrame(win, fg_color="transparent")
+        bottom_area.pack(side="bottom", fill="x", pady=(5, 15))
+        
+        scroll_form = ctk.CTkScrollableFrame(win, fg_color="transparent")
+        scroll_form.pack(side="top", fill="both", expand=True, padx=5, pady=5)
+
         labels = [
             ("nama", "Nama Produk", ""),
             ("kategori", "Kategori", ""),
@@ -282,15 +288,16 @@ class StokFrame(ctk.CTkFrame):
             ("harga_jual", "Harga Jual (Rp)", ""),
             ("stok", "Stok", ""),
             ("satuan", "Satuan (pcs / kg / pack / dll)", "pcs"),
+            ("expired_date", "Tgl Expired (Boleh kosong, cth: 2026-12)", ""),
         ]
 
         fields = {}
         warnings = {}
         for key, label, default in labels:
-            ctk.CTkLabel(win, text=label, anchor="w").pack(fill="x", padx=25, pady=(14, 2))
+            ctk.CTkLabel(scroll_form, text=label, anchor="w").pack(fill="x", padx=25, pady=(14, 2))
             
             if key == "kategori":
-                cat_frame = ctk.CTkFrame(win, fg_color="transparent")
+                cat_frame = ctk.CTkFrame(scroll_form, fg_color="transparent")
                 cat_frame.pack(fill="x", padx=25)
                 
                 # Ambil list kategori dari database
@@ -344,7 +351,7 @@ class StokFrame(ctk.CTkFrame):
                 fields[key] = kategori_combo
                 continue
             
-            entry = ctk.CTkEntry(win, height=34)
+            entry = ctk.CTkEntry(scroll_form, height=34)
             entry.pack(fill="x", padx=25)
 
             if key in ("harga_beli", "harga_jual"):
@@ -368,12 +375,12 @@ class StokFrame(ctk.CTkFrame):
             # sampai klik Simpan. Cek "harus angka" udah nggak relevan lagi buat
             # harga/stok karena karakter selain angka sekarang gak bisa masuk sama sekali.
             if key in ("nama", "harga_jual", "stok"):
-                warn = ctk.CTkLabel(win, text="", text_color="#C0392B",
+                # UBAH: Ganti win jadi scroll_form
+                warn = ctk.CTkLabel(scroll_form, text="", text_color="#C0392B",
                                     font=ctk.CTkFont(size=11), anchor="w", height=16)
                 warn.pack(fill="x", padx=25)
-                warnings[key] = warn
 
-        img_frame = ctk.CTkFrame(win, fg_color="transparent")
+        img_frame = ctk.CTkFrame(scroll_form, fg_color="transparent")
         img_frame.pack(fill="x", padx=25, pady=(15, 0))
         
         lbl_gambar = ctk.CTkLabel(img_frame, text="Gambar: " + (nama_gambar_lama or "Tidak ada"), text_color="gray")
@@ -446,11 +453,25 @@ class StokFrame(ctk.CTkFrame):
                 messagebox.showerror("Error", "Harga dan stok harus diisi dengan benar")
                 return
 
+            expired_date = fields["expired_date"].get().strip()
+
             if produk:
-                db.update_produk(produk["id"], nama, kategori, harga_beli, harga_jual, stok, satuan, nama_file_gambar)
+                # Cek apakah stok baru lebih besar dari stok lama (artinya ayahmu baru restock/kulakan)
+                stok_lama = produk["stok"]
+                selisih_stok = stok - stok_lama
+                
+                db.update_produk(produk["id"], nama, kategori, harga_beli, harga_jual, stok, satuan, nama_file_gambar, expired_date)
                 id_terbaru = produk["id"]
+                
+                # Jika stok bertambah, catat ke tabel riwayat barang masuk secara diam-diam
+                if selisih_stok > 0:
+                    db.tambah_riwayat_stok(id_terbaru, selisih_stok, harga_beli, "Restock")
             else:
-                id_terbaru = db.tambah_produk(nama, kategori, harga_beli, harga_jual, stok, satuan, nama_file_gambar)
+                id_terbaru = db.tambah_produk(nama, kategori, harga_beli, harga_jual, stok, satuan, nama_file_gambar, expired_date)
+                
+                # Jika tambah barang baru dan langsung ada stoknya, catat sebagai barang masuk
+                if stok > 0:
+                    db.tambah_riwayat_stok(id_terbaru, stok, harga_beli, "Barang Baru")
 
             # Perbarui tabel dan perintahkan untuk menyorot barang terbaru
             self.refresh_list(highlight_id=id_terbaru)
@@ -483,8 +504,8 @@ class StokFrame(ctk.CTkFrame):
             win.destroy()
 
         # --- UI TOMBOL DINAMIS ---
-        btn_row = ctk.CTkFrame(win, fg_color="transparent")
-        btn_row.pack(pady=25, padx=25, fill="x")
+        btn_row = ctk.CTkFrame(bottom_area, fg_color="transparent")
+        btn_row.pack(pady=10, padx=25, fill="x")
         
         # Gunakan pack agar tombol membagi ruang secara otomatis dan rapi
         ctk.CTkButton(btn_row, text="Batal", height=38,

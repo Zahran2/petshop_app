@@ -39,7 +39,6 @@ def init_db():
     """)
 
     # --- TRIK PENYELAMATAN DATA MODAL ---
-    # --- TRIK PENYELAMATAN DATA MODAL ---
     try:
         cur.execute("ALTER TABLE produk ADD COLUMN harga_beli REAL DEFAULT 0")
         cur.execute("UPDATE produk SET harga_beli = harga_jual")
@@ -101,27 +100,54 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    # --- Tabel Riwayat Stok & Kolom Expired ---
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS riwayat_stok (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            produk_id INTEGER NOT NULL,
+            tanggal TEXT NOT NULL,
+            jumlah INTEGER NOT NULL,
+            harga_beli REAL NOT NULL,
+            keterangan TEXT DEFAULT 'Restock'
+        )
+    """)
+
+    # Trik menyisipkan kolom expired_date tanpa merusak data lama
+    try:
+        cur.execute("ALTER TABLE produk ADD COLUMN expired_date TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
+
     conn.commit()
 
 
 # ---------------- PRODUK ----------------
 
-def tambah_produk(nama, kategori, harga_beli, harga_jual, stok, satuan="pcs", gambar=""):
+def tambah_riwayat_stok(produk_id, jumlah, harga_beli, keterangan="Restock"):
+    conn = get_connection()
+    tanggal = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute(
+        "INSERT INTO riwayat_stok (produk_id, tanggal, jumlah, harga_beli, keterangan) VALUES (?, ?, ?, ?, ?)",
+        (produk_id, tanggal, jumlah, harga_beli, keterangan)
+    )
+    conn.commit()
+
+def tambah_produk(nama, kategori, harga_beli, harga_jual, stok, satuan="pcs", gambar="", expired_date=""):
     conn = get_connection()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO produk (nama, kategori, harga_beli, harga_jual, stok, satuan, gambar) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (nama, kategori, harga_beli, harga_jual, stok, satuan, gambar),
+        "INSERT INTO produk (nama, kategori, harga_beli, harga_jual, stok, satuan, gambar, expired_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (nama, kategori, harga_beli, harga_jual, stok, satuan, gambar, expired_date),
     )
-    id_baru = cur.lastrowid  # Tangkap ID barang yang baru saja masuk
+    id_baru = cur.lastrowid
     conn.commit()
-    return id_baru           # Kembalikan ID tersebut ke aplikasi
+    return id_baru
 
-def update_produk(produk_id, nama, kategori, harga_beli, harga_jual, stok, satuan, gambar):
+def update_produk(produk_id, nama, kategori, harga_beli, harga_jual, stok, satuan, gambar, expired_date):
     conn = get_connection()
     conn.execute(
-        "UPDATE produk SET nama=?, kategori=?, harga_beli=?, harga_jual=?, stok=?, satuan=?, gambar=? WHERE id=?",
-        (nama, kategori, harga_beli, harga_jual, stok, satuan, gambar, produk_id),
+        "UPDATE produk SET nama=?, kategori=?, harga_beli=?, harga_jual=?, stok=?, satuan=?, gambar=?, expired_date=? WHERE id=?",
+        (nama, kategori, harga_beli, harga_jual, stok, satuan, gambar, expired_date, produk_id),
     )
     conn.commit()
 
