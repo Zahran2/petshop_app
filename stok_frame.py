@@ -56,8 +56,12 @@ class StokFrame(ctk.CTkFrame):
         ctk.CTkButton(top, text="+ Tambah Produk", height=36,
                      command=self.form_tambah).grid(row=0, column=3)
 
+        ctk.CTkButton(top, text="Riwayat Masuk", height=36, fg_color="#3498db", hover_color="#2980b9",
+                     command=self.buka_riwayat_masuk).grid(row=0, column=4, padx=(10, 0))
+        
+        # Geser tombol Export ke column 5
         ctk.CTkButton(top, text="⬇️ Export CSV", height=36, fg_color="#27ae60", hover_color="#2ecc71",
-                     command=self.export_csv).grid(row=0, column=4, padx=(10, 0))
+                     command=self.export_csv).grid(row=0, column=5, padx=(10, 0))
         
         self.filter_stok_var = ctk.BooleanVar(value=False)
 
@@ -640,3 +644,73 @@ class StokFrame(ctk.CTkFrame):
 
         # Tampilkan data pertama kali dibuka
         refresh_kategori_list()
+
+    def buka_riwayat_masuk(self):
+            win = ctk.CTkToplevel(self)
+            win.title("Riwayat Barang Masuk")
+            
+            # --- Trik mengatur posisi pop-up di tengah layar ---
+            win.update_idletasks()
+            lebar_popup = 650
+            tinggi_popup = 500
+            lebar_layar = win.winfo_screenwidth()
+            tinggi_layar = win.winfo_screenheight()
+            x = (lebar_layar // 2) - (lebar_popup // 2)
+            y = (tinggi_layar // 2) - (tinggi_popup // 2) - 20
+            win.geometry(f"{lebar_popup}x{tinggi_popup}+{x}+{y}")
+            win.grab_set()
+
+            ctk.CTkLabel(win, text="Riwayat Penambahan Stok", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=(15, 10))
+
+            # --- Tabel Riwayat Menggunakan Treeview ---
+            columns = ("tanggal", "nama", "jumlah", "harga", "keterangan")
+            tree_riwayat = ttk.Treeview(win, columns=columns, show="headings", selectmode="none")
+            
+            # Atur Judul dan Lebar Kolom
+            tree_riwayat.heading("tanggal", text="Tanggal Masuk")
+            tree_riwayat.column("tanggal", width=130, anchor="center")
+            
+            tree_riwayat.heading("nama", text="Nama Produk")
+            tree_riwayat.column("nama", width=200, anchor="w")
+            
+            tree_riwayat.heading("jumlah", text="Jml Tambah (Stok)")
+            tree_riwayat.column("jumlah", width=80, anchor="center")
+            
+            tree_riwayat.heading("harga", text="Harga Modal")
+            tree_riwayat.column("harga", width=120, anchor="e")
+            
+            tree_riwayat.heading("keterangan", text="Keterangan")
+            tree_riwayat.column("keterangan", width=100, anchor="center")
+
+            tree_riwayat.pack(fill="both", expand=True, padx=20, pady=(0, 10))
+
+            # --- Tambahkan Scrollbar ---
+            scrollbar = ctk.CTkScrollbar(win, orientation="vertical", command=tree_riwayat.yview)
+            scrollbar.place(relx=1.0, rely=0.1, relheight=0.85, anchor="ne")
+            tree_riwayat.configure(yscrollcommand=scrollbar.set)
+
+            # --- Isi Tabel dengan Data dari Database ---
+            conn = db.get_connection()
+            # Kita JOIN tabel riwayat_stok dengan produk agar namanya muncul
+            query = """
+                SELECT r.tanggal, p.nama, r.jumlah, r.harga_beli, r.keterangan 
+                FROM riwayat_stok r
+                JOIN produk p ON r.produk_id = p.id
+                ORDER BY r.id DESC
+            """
+            try:
+                rows = conn.execute(query).fetchall()
+                for r in rows:
+                    tree_riwayat.insert("", "end", values=(
+                        r["tanggal"], 
+                        r["nama"], 
+                        f"+{r['jumlah']}", 
+                        utils.format_rupiah(r["harga_beli"]), 
+                        r["keterangan"]
+                    ))
+            except Exception as e:
+                # Mengabaikan error jika tabel riwayat belum terbentuk sempurna (fallback aman)
+                print(f"Error load riwayat: {e}")
+
+            # Tombol Tutup
+            ctk.CTkButton(win, text="Tutup", width=120, command=win.destroy).pack(pady=(0, 20))
