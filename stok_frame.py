@@ -2,6 +2,7 @@
 
 import customtkinter as ctk
 from tkinter import messagebox, ttk, filedialog
+from datetime import datetime
 import csv
 import db
 import utils
@@ -74,6 +75,8 @@ class StokFrame(ctk.CTkFrame):
 
         self.tree.grid(row=1, column=0, sticky="nsew", pady=(0, 5))
         self.tree.tag_configure("low_stock", background="#FBE0E0")
+        self.tree.tag_configure("near_expired", background="#FCF3CF") # Kuning pastel
+        self.tree.tag_configure("expired", background="#E8A2A2")      # Merah jelas
 
         self.scrollbar = ctk.CTkScrollbar(self, orientation="vertical", command=self.tree.yview)
         self.scrollbar.grid(row=1, column=1, sticky="ns", pady=(0, 5))
@@ -84,9 +87,26 @@ class StokFrame(ctk.CTkFrame):
         info_row = ctk.CTkFrame(self, fg_color="transparent")
         info_row.grid(row=2, column=0, sticky="ew", pady=(5, 0))
         
-        # Label indikator warna merah (kiri)
-        ctk.CTkLabel(info_row, text=f"🔴  Baris merah = stok tinggal {BATAS_STOK_MENIPIS} atau kurang",
-                    text_color=("gray40", "gray65"), font=ctk.CTkFont(size=12)).pack(side="left")
+        legend_frame = ctk.CTkFrame(info_row, fg_color="transparent")
+        legend_frame.pack(side="left")
+
+        # 1. Indikator Stok Menipis (Merah Muda)
+        ctk.CTkFrame(legend_frame, width=14, height=14, corner_radius=7, 
+                     fg_color="#FBE0E0", border_width=1, border_color="#D1B0B0").pack(side="left")
+        ctk.CTkLabel(legend_frame, text=f" Stok ≤ {BATAS_STOK_MENIPIS}", 
+                     font=ctk.CTkFont(size=12)).pack(side="left", padx=(4, 15))
+
+        # 2. Indikator Peringatan Dini Expired (Kuning Pastel)
+        ctk.CTkFrame(legend_frame, width=14, height=14, corner_radius=7, 
+                     fg_color="#FCF3CF", border_width=1, border_color="#D1C7A3").pack(side="left")
+        ctk.CTkLabel(legend_frame, text=" Expired ≤ 2 Bulan", 
+                     font=ctk.CTkFont(size=12)).pack(side="left", padx=(4, 15))
+
+        # 3. Indikator Sudah Expired (Merah Terang)
+        ctk.CTkFrame(legend_frame, width=14, height=14, corner_radius=7, 
+                     fg_color="#E8A2A2", border_width=1, border_color="#C07C7C").pack(side="left")
+        ctk.CTkLabel(legend_frame, text=" Sudah Expired", 
+                     font=ctk.CTkFont(size=12)).pack(side="left", padx=(4, 10))
 
         # Checkbox Filter Stok Menipis (kanan)
         ctk.CTkCheckBox(
@@ -178,7 +198,31 @@ class StokFrame(ctk.CTkFrame):
             if hanya_menipis and p["stok"] > BATAS_STOK_MENIPIS:
                 continue
                 
-            tag = "low_stock" if p["stok"] <= BATAS_STOK_MENIPIS else ""
+            tag = ""
+            
+            # 1. Cek Expired (Prioritas Utama)
+            exp_date_str = p.get("expired_date", "").strip()
+            if exp_date_str:
+                try:
+                    # Deteksi format (YYYY-MM-DD atau YYYY-MM)
+                    if len(exp_date_str) == 7:
+                        exp_date = datetime.strptime(exp_date_str, "%Y-%m")
+                    else:
+                        exp_date = datetime.strptime(exp_date_str, "%Y-%m-%d")
+                        
+                    sisa_hari = (exp_date - datetime.now()).days
+                    
+                    if sisa_hari < 0:
+                        tag = "expired"
+                    elif sisa_hari <= 60:
+                        tag = "near_expired"
+                except ValueError:
+                    pass # Abaikan jika ayahmu salah format mengetik tanggal
+                    
+            # 2. Cek Stok (Hanya diwarnai jika barang tidak sedang terancam expired)
+            if not tag and p["stok"] <= BATAS_STOK_MENIPIS:
+                tag = "low_stock"
+
             self.tree.insert(
                 "", "end", iid=str(p["id"]),
                 values=(p["nama"], p["kategori"], utils.format_rupiah(p["harga_beli"]), utils.format_rupiah(p["harga_jual"]), p["stok"], p["satuan"], p.get("expired_date", "")),
