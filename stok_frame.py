@@ -91,6 +91,7 @@ class StokFrame(ctk.CTkFrame):
         info_row = ctk.CTkFrame(self, fg_color="transparent")
         info_row.grid(row=2, column=0, sticky="ew", pady=(5, 0))
         
+        # Legenda warna indikator (kiri)
         legend_frame = ctk.CTkFrame(info_row, fg_color="transparent")
         legend_frame.pack(side="left")
 
@@ -112,13 +113,22 @@ class StokFrame(ctk.CTkFrame):
         ctk.CTkLabel(legend_frame, text=" Sudah Expired", 
                      font=ctk.CTkFont(size=12)).pack(side="left", padx=(4, 10))
 
-        # Checkbox Filter Stok Menipis (kanan)
+        # 1. Checkbox Filter Dead Stock / Barang Susah Laku (Kanan)
+        self.filter_dead_stock_var = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
-            info_row, text="⚠️ Hanya tampilkan stok menipis", 
+            info_row, text="💤 Dead Stock (>30 Hari)", 
+            variable=self.filter_dead_stock_var, command=self.refresh_list,
+            font=ctk.CTkFont(size=12, weight="bold"), 
+            text_color="#8E44AD", fg_color="#8E44AD", hover_color="#71368A"
+        ).pack(side="right", padx=(0, 10))
+
+        # 2. Checkbox Filter Stok Menipis
+        ctk.CTkCheckBox(
+            info_row, text="⚠️ Stok Menipis", 
             variable=self.filter_stok_var, command=self.refresh_list,
             font=ctk.CTkFont(size=12, weight="bold"), 
             text_color="#C0392B", fg_color="#C0392B", hover_color="#922B21"
-        ).pack(side="right", padx=(0, 10))
+        ).pack(side="right", padx=(0, 15))
 
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.grid(row=3, column=0, sticky="ew", pady=(10, 0))
@@ -195,55 +205,40 @@ class StokFrame(ctk.CTkFrame):
             
         keyword = self.search_var.get()
         kategori_terpilih = self.filter_kat_var.get() 
-        hanya_menipis = self.filter_stok_var.get() # Ambil status checkbox (True/False)
+        hanya_menipis = self.filter_stok_var.get()
+        hanya_dead_stock = self.filter_dead_stock_var.get() # Ambil status checkbox Dead Stock
+        
+        # Ambil daftar ID produk yang terjual dalam 30 hari terakhir HANYA jika filter aktif
+        terjual_30_hari = db.get_id_produk_terjual_terakhir(30) if hanya_dead_stock else set()
         
         for p in db.get_semua_produk(keyword, kategori_terpilih):
-            # Jika dicentang, dan stoknya masih lebih dari batas aman, abaikan (jangan ditampikan)
+            # 1. Filter stok menipis
             if hanya_menipis and p["stok"] > BATAS_STOK_MENIPIS:
                 continue
                 
-            tag = ""
-            
-            # 1. Cek Expired (Prioritas Utama)
-            exp_date_str = p.get("expired_date", "").strip()
-            if exp_date_str:
-                try:
-                    # Deteksi format (YYYY-MM-DD atau YYYY-MM)
-                    if len(exp_date_str) == 7:
-                        exp_date = datetime.strptime(exp_date_str, "%Y-%m")
-                    else:
-                        exp_date = datetime.strptime(exp_date_str, "%Y-%m-%d")
-                        
-                    sisa_hari = (exp_date - datetime.now()).days
-                    
-                    if sisa_hari < 0:
-                        tag = "expired"
-                    elif sisa_hari <= 60:
-                        tag = "near_expired"
-                except ValueError:
-                    pass # Abaikan jika ayahmu salah format mengetik tanggal
-                    
-            # 2. Cek Stok (Hanya diwarnai jika barang tidak sedang terancam expired)
-            if not tag and p["stok"] <= BATAS_STOK_MENIPIS:
-                tag = "low_stock"
-
+            # 2. Filter Dead Stock: Stok masih ada (>0) TAPI tidak pernah terjual dalam 30 hari terakhir
+            if hanya_dead_stock:
+                if p["stok"] <= 0 or p["id"] in terjual_30_hari:
+                    continue
+                
+            tag = "low_stock" if p["stok"] <= BATAS_STOK_MENIPIS else ""
             self.tree.insert(
                 "", "end", iid=str(p["id"]),
-                values=(p["nama"], p["kategori"], utils.format_rupiah(p["harga_beli"]), utils.format_rupiah(p["harga_jual"]), p["stok"], p["satuan"], p.get("expired_date", "")),
+                values=(p["nama"], p["kategori"], utils.format_rupiah(p["harga_beli"]), utils.format_rupiah(p["harga_jual"]), p["stok"], p["satuan"]),
                 tags=(tag,) if tag else (),
             )
 
-        # Jika sebelumnya user sedang melakukan sorting berdasarkan kolom tertentu, terapkan kembali secara otomatis
+        # Pertahankan urutan sorting jika sebelumnya diurutkan
         if self._current_sort_col:
             self._sort_by_kolom(self._current_sort_col, self._current_sort_reverse, toggle=False)
-            
-        # --- TAMBAHKAN LOGIKA HIGHLIGHT DI SINI (Di luar/bawah loop for) ---
+
+        # Highlight data terbaru jika ada
         if highlight_id:
             item_id = str(highlight_id)
             if self.tree.exists(item_id):
-                self.tree.selection_set(item_id) # Blok dengan warna seleksi (biru)
-                self.tree.focus(item_id)         # Fokuskan sistem ke baris tersebut
-                self.tree.see(item_id)           # Otomatis scroll tabel sampai barang ini terlihat
+                self.tree.selection_set(item_id)
+                self.tree.focus(item_id)
+                self.tree.see(item_id)
 
     def form_tambah(self):
         self._buka_form()

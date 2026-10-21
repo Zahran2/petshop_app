@@ -385,3 +385,24 @@ def set_pengaturan(kunci, nilai):
         (kunci, str(nilai)),
     )
     conn.commit()
+
+def get_id_produk_terjual_terakhir(hari=30):
+    """
+    Mengembalikan set ID produk yang pernah ada transaksi dalam N hari terakhir.
+    """
+    conn = get_connection()
+    today = datetime.now()
+    batas_tanggal = (today - timedelta(days=hari)).strftime("%Y-%m-%d %H:%M:%S")
+    
+    query = """
+        SELECT DISTINCT td.produk_id 
+        FROM transaksi_detail td
+        JOIN transaksi t ON td.transaksi_id = t.id
+        WHERE t.tanggal >= ?
+    """
+    try:
+        rows = conn.execute(query, (batas_tanggal,)).fetchall()
+        return {r["produk_id"] for r in rows if r["produk_id"]}
+    except Exception as e:
+        print(f"Error dead stock query: {e}")
+        return set()
