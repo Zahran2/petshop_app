@@ -15,29 +15,32 @@ class RiwayatFrame(ctk.CTkFrame):
 
     def _build_ui(self):
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(1, weight=1) # Memastikan tabel treeview yang meluas
 
+        # --- PERBAIKAN TATA LETAK PANEL ATAS (Menggunakan pack) ---
         top = ctk.CTkFrame(self, fg_color="transparent")
         top.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        top.grid_columnconfigure(0, weight=1)
 
-        self.ringkasan_label = ctk.CTkLabel(top, text="", font=ctk.CTkFont(size=17, weight="bold"))
-        self.ringkasan_label.grid(row=0, column=0, sticky="w")
-        
-        # Tambahkan Dropdown Filter
+        # 1. Pasang Tombol & Dropdown di sisi KANAN terlebih dahulu
+        ctk.CTkButton(top, text="⬇️ Export CSV", width=100, fg_color="#27ae60", hover_color="#2ecc71",
+                      command=self.export_csv).pack(side="right", padx=(10, 0))
+                      
+        ctk.CTkButton(top, text="🔄 Refresh", width=100, command=self.refresh).pack(side="right", padx=(10, 0))
+
         self.filter_waktu_var = ctk.StringVar(value="Hari Ini")
-        pilihan_waktu = ["Hari Ini", "7 Hari Terakhir", "Bulan Ini", "Semua Waktu"]
         self.filter_waktu_combo = ctk.CTkComboBox(
-            top, values=pilihan_waktu, variable=self.filter_waktu_var, width=150,
+            top, values=["Hari Ini", "7 Hari Terakhir", "Bulan Ini", "Semua Waktu"], 
+            variable=self.filter_waktu_var, width=140,
             command=lambda e: self.refresh()
         )
-        self.filter_waktu_combo.grid(row=0, column=1, padx=(0, 10))
+        self.filter_waktu_combo.pack(side="right", padx=(10, 0))
 
-        # Tombol Refresh digeser ke column 2
-        ctk.CTkButton(top, text="🔄 Refresh", width=100, command=self.refresh).grid(row=0, column=2)
-
-        ctk.CTkButton(top, text="⬇️ Export CSV", width=100, fg_color="#27ae60", hover_color="#2ecc71",
-                      command=self.export_csv).grid(row=0, column=3, padx=(10, 0))
+        # 2. Pasang Label Ringkasan di sisi KIRI
+        self.ringkasan_label = ctk.CTkLabel(
+            top, text="", font=ctk.CTkFont(size=14, weight="bold"), anchor="w"
+        )
+        self.ringkasan_label.pack(side="left", fill="x", expand=True)
+        # --- AKHIR PERBAIKAN PANEL ATAS ---
 
         self._kolom_headings = {"waktu": "Waktu", "total": "Pendapatan", "keuntungan": "Profit", "dibayar": "Dibayar", "kembalian": "Kembalian"}
 
@@ -46,6 +49,7 @@ class RiwayatFrame(ctk.CTkFrame):
         self.tree = ttk.Treeview(self, columns=columns, show="headings", selectmode="browse")
         self._apply_treeview_columns()
         self.tree.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
+        
         self.scrollbar = ctk.CTkScrollbar(self, orientation="vertical", command=self.tree.yview)
         self.scrollbar.grid(row=1, column=1, sticky="ns", pady=(0, 5))
         
@@ -57,6 +61,7 @@ class RiwayatFrame(ctk.CTkFrame):
                     font=ctk.CTkFont(size=12), text_color=("gray40", "gray65")).grid(
             row=2, column=0, sticky="w"
         )
+        
         self.detail_box = ctk.CTkTextbox(self, height=140)
         self.detail_box.grid(row=3, column=0, sticky="ew", pady=(5, 0))
         self.detail_box.insert("1.0", "Klik salah satu transaksi di atas untuk melihat detail item yang terjual.")

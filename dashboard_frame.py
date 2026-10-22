@@ -66,7 +66,9 @@ class DashboardFrame(ctk.CTkFrame):
         ctk.CTkLabel(header_row, text="Terjual", width=60, anchor="e", text_color="gray").pack(side="right")
         
         # Isi data
-        for i, item in enumerate(data_list):
+        for i, row_item in enumerate(data_list):
+            item = dict(row_item) # <--- TAMBAHKAN BARIS INI: Konversi ke dictionary murni
+            
             row = ctk.CTkFrame(master, fg_color="transparent")
             row.pack(fill="x", pady=4)
             
