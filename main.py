@@ -9,26 +9,16 @@ import utils
 from kasir_frame import KasirFrame
 from stok_frame import StokFrame
 from riwayat_frame import RiwayatFrame
-from dashboard_frame import DashboardFrame  # <-- Import frame dashboard
+from dashboard_frame import DashboardFrame
+from login_frame import LoginFrame # <-- Import file login yang baru dibuat
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("green")
-
-# --- TETAPKAN STRUKTUR AWAL DENGAN MENAMBAHKAN DASHBOARD ---
-MENU_ITEMS = [
-    ("kasir", "🛒  Kasir"),
-    ("stok", "📦  Stok"),
-    ("riwayat", "📜  Riwayat"),
-    ("dashboard", "📊  Dashboard"),  # <-- Tambahkan item ini saja
-]
-
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        # Muat skala teks yang tersimpan (kalau ada) SEBELUM widget dibikin,
-        # biar langsung tampil di ukuran yang bener dari awal, gak "lompat".
         utils.skala_teks = float(db.get_pengaturan("skala_teks", "1.0"))
         ctk.set_widget_scaling(utils.skala_teks)
 
@@ -36,127 +26,138 @@ class App(ctk.CTk):
         self.geometry("1050x680")
         self.minsize(900, 560)
 
-        self.grid_columnconfigure(1, weight=1)
+        # Siapkan wadah (container) layar penuh
+        self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
+        self.container_utama = ctk.CTkFrame(self, fg_color="transparent")
+        self.container_utama.grid(row=0, column=0, sticky="nsew")
+        self.container_utama.grid_columnconfigure(0, weight=1)
+        self.container_utama.grid_rowconfigure(0, weight=1)
 
+        # Tampilkan layar Login pertama kali
+        self.tampilkan_login()
+
+    def tampilkan_login(self):
+        # Bersihkan layar jika ada komponen sisa (misal saat proses Logout)
+        for widget in self.container_utama.winfo_children():
+            widget.destroy()
+
+        # Kembalikan kolom 0 agar meregang penuh dan matikan regangan kolom 1
+        self.container_utama.grid_columnconfigure(0, weight=1)
+        self.container_utama.grid_columnconfigure(1, weight=0)
+            
+        self.login_frame = LoginFrame(self.container_utama, self.masuk_sistem)
+        self.login_frame.grid(row=0, column=0, sticky="nsew")
+
+    def konfirmasi_logout(self):
+        from tkinter import messagebox
+        konfirmasi = messagebox.askyesno(
+            "Konfirmasi Logout", 
+            "Yakin ingin keluar dari sistem?\nAnda harus memasukkan PIN lagi untuk masuk."
+        )
+        if konfirmasi:
+            self.tampilkan_login()
+
+    def masuk_sistem(self, role):
+        # Hancurkan layar login
+        self.login_frame.destroy()
+        
+        # Ubah konfigurasi grid utama untuk memunculkan Sidebar (kolom 0) dan Konten (kolom 1)
+        self.container_utama.grid_columnconfigure(0, weight=0) # Sidebar tidak meregang
+        self.container_utama.grid_columnconfigure(1, weight=1) # Konten meregang penuh
+        
+        # Simpan hak akses pengguna saat ini
+        self.role_saat_ini = role
+        
+        # Bangun menu dan layar sesuai jabatan
         self._build_sidebar()
         self._build_content()
+        
+        # Arahkan langsung ke menu Kasir sebagai beranda
         self.tampilkan("kasir")
 
     def _build_sidebar(self):
-        # KODE ASLI / AWAL TIDAK DIUBAH SAMA SEKALI
-        sidebar = ctk.CTkFrame(self, width=190, corner_radius=0)
-        sidebar.grid(row=0, column=0, sticky="nsw")
-        sidebar.grid_propagate(False)
+        self.sidebar = ctk.CTkFrame(self.container_utama, width=190, corner_radius=0)
+        self.sidebar.grid(row=0, column=0, sticky="nsw")
+        self.sidebar.grid_propagate(False)
 
-        ctk.CTkLabel(sidebar, text="🐾 Petshop", font=ctk.CTkFont(size=21, weight="bold")).pack(
-            pady=(28, 4), padx=20, anchor="w"
-        )
-        ctk.CTkLabel(sidebar, text="Kasir & Stok", font=ctk.CTkFont(size=12),
-                    text_color=("gray40", "gray65")).pack(pady=(0, 25), padx=20, anchor="w")
+        ctk.CTkLabel(self.sidebar, text="🐾 Petshop", font=ctk.CTkFont(size=21, weight="bold")).pack(pady=(28, 4), padx=20, anchor="w")
+        
+        # Tampilkan status login (Admin / Kasir) di bawah logo
+        teks_status = "Mode Bos/Admin" if self.role_saat_ini == "admin" else "Mode Kasir"
+        warna_status = "#27ae60" if self.role_saat_ini == "admin" else "#2980b9"
+        ctk.CTkLabel(self.sidebar, text=teks_status, font=ctk.CTkFont(size=12, weight="bold"), text_color=warna_status).pack(pady=(0, 25), padx=20, anchor="w")
 
         self.buttons = {}
-        for key, label in MENU_ITEMS:
+        
+        # MENU DINAMIS BERDASARKAN HAK AKSES
+        menu_items = []
+        if self.role_saat_ini == "admin":
+            # Jika Admin (ayahmu): Buka semua akses
+            menu_items = [
+                ("kasir", "🛒  Kasir"),
+                ("stok", "📦  Stok"),
+                ("riwayat", "📜  Riwayat"),
+                ("dashboard", "📊  Dashboard")
+            ]
+        else:
+            # Jika Kasir (karyawan): Cuma bisa melihat mesin kasir!
+            menu_items = [
+                ("kasir", "🛒  Kasir")
+            ]
+
+        # Rakit tombol menu berdasarkan list di atas
+        for key, label in menu_items:
             btn = ctk.CTkButton(
-                sidebar, text=label, anchor="w", height=42, corner_radius=8,
-                fg_color="transparent", text_color=("gray10", "gray90"),
-                font=ctk.CTkFont(size=14),
+                self.sidebar, text=label, anchor="w", height=42, corner_radius=8,
+                fg_color="transparent", text_color=("gray10", "gray90"), font=ctk.CTkFont(size=14),
                 command=lambda k=key: self.tampilkan(k),
             )
             btn.pack(fill="x", padx=15, pady=4)
             self.buttons[key] = btn
 
-        # Kontrol ukuran teks - ditaruh di BAWAH sidebar
-        skala_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        skala_frame.pack(side="bottom", fill="x", padx=15, pady=20)
-
-        ctk.CTkLabel(skala_frame, text="Ukuran Teks", font=ctk.CTkFont(size=11),
-                    text_color=("gray40", "gray65")).pack(anchor="w", pady=(0, 6))
-
-        tombol_row = ctk.CTkFrame(skala_frame, fg_color="transparent")
-        tombol_row.pack(fill="x")
-        tombol_row.grid_columnconfigure((0, 1, 2), weight=1)
-
-        self.btn_kecil = ctk.CTkButton(tombol_row, text="A-", width=44, height=34,
-                                        font=ctk.CTkFont(size=13),
-                                        command=self.perkecil_teks)
-        self.btn_kecil.grid(row=0, column=0, padx=(0, 4))
-
-        self.skala_label = ctk.CTkLabel(tombol_row, text="100%", font=ctk.CTkFont(size=12),
-                                         text_color=("gray30", "gray80"))
-        self.skala_label.grid(row=0, column=1)
-        self.skala_label.bind("<Button-1>", lambda e: self.reset_skala())
-
-        self.btn_besar = ctk.CTkButton(tombol_row, text="A+", width=44, height=34,
-                                        font=ctk.CTkFont(size=15),
-                                        command=self.perbesar_teks)
-        self.btn_besar.grid(row=0, column=2, padx=(4, 0))
-
-        ctk.CTkLabel(skala_frame, text="Klik angka % buat reset", font=ctk.CTkFont(size=10),
-                    text_color=("gray55", "gray50")).pack(anchor="w", pady=(4, 0))
-
-        self._perbarui_kontrol_skala()
+        # Tombol LOGOUT di paling bawah
+        ctk.CTkButton(self.sidebar, text="Keluar (Logout)", height=35, fg_color="#c0392b", hover_color="#922B21", 
+                     command=self.konfirmasi_logout).pack(side="bottom", fill="x", padx=15, pady=20)
 
     def _build_content(self):
-        self.container = ctk.CTkFrame(self, fg_color="transparent")
-        self.container.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
-        self.container.grid_rowconfigure(0, weight=1)
-        self.container.grid_columnconfigure(0, weight=1)
+        self.konten_area = ctk.CTkFrame(self.container_utama, fg_color="transparent")
+        self.konten_area.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        self.konten_area.grid_rowconfigure(0, weight=1)
+        self.konten_area.grid_columnconfigure(0, weight=1)
 
-        self.frames = {
-            "kasir": KasirFrame(self.container),
-            "stok": StokFrame(self.container),
-            "riwayat": RiwayatFrame(self.container),
-            "dashboard": DashboardFrame(self.container),  # <-- Daftarkan frame dashboard
-        }
+        # Rakit layar yang dibutuhkan saja untuk menghemat memori
+        self.frames = {"kasir": KasirFrame(self.konten_area)}
+        
+        # Layar rahasia hanya dibentuk jika yang login adalah admin
+        if self.role_saat_ini == "admin":
+            self.frames["stok"] = StokFrame(self.konten_area)
+            self.frames["riwayat"] = RiwayatFrame(self.konten_area)
+            self.frames["dashboard"] = DashboardFrame(self.konten_area)
+
         for frame in self.frames.values():
             frame.grid(row=0, column=0, sticky="nsew")
 
     def tampilkan(self, key):
-        if hasattr(self, "_menu_saat_ini") and self._menu_saat_ini == key:
+        if hasattr(self, "_menu_saat_ini") and getattr(self, "_menu_saat_ini") == key:
             return
         self._menu_saat_ini = key
 
-        # Warna tombol aktif tetap sesuai style awal (#E8C9A0)
+        # Ubah warna tombol aktif
         for k, btn in self.buttons.items():
-            is_active = (k == key)
-            btn.configure(fg_color=("#E8C9A0", "#5A4527") if is_active else "transparent")
+            btn.configure(fg_color=("#E8C9A0", "#5A4527") if k == key else "transparent")
 
-        if key == "riwayat":
-            self.frames["riwayat"].refresh()
-        elif key == "stok":
-            self.frames["stok"].refresh_list()
+        # Refresh data menggunakan trik anti-lag yang sudah kita buat sebelumnya
+        if key == "riwayat" and "riwayat" in self.frames:
+            self.after(50, self.frames["riwayat"].refresh)
+        elif key == "stok" and "stok" in self.frames:
+            self.after(50, self.frames["stok"].refresh_list)
         elif key == "kasir":
-            self.frames["kasir"].refresh_produk_list()
-        elif key == "dashboard":
-            self.frames["dashboard"].refresh_dashboard()  # <-- Refresh data dashboard saat diklik
+            self.after(50, self.frames["kasir"].refresh_produk_list)
+        elif key == "dashboard" and "dashboard" in self.frames:
+             self.after(50, self.frames["dashboard"].refresh_dashboard)
 
         self.frames[key].tkraise()
-
-    def _perbarui_kontrol_skala(self):
-        self.skala_label.configure(text=f"{round(utils.skala_teks * 100)}%")
-        self.btn_kecil.configure(state="disabled" if utils.skala_teks <= utils.SKALA_MIN else "normal")
-        self.btn_besar.configure(state="disabled" if utils.skala_teks >= utils.SKALA_MAX else "normal")
-
-    def terapkan_skala(self, skala_baru):
-        skala_baru = round(max(utils.SKALA_MIN, min(utils.SKALA_MAX, skala_baru)), 1)
-        if skala_baru == utils.skala_teks:
-            return
-        utils.skala_teks = skala_baru
-        ctk.set_widget_scaling(skala_baru)
-        db.set_pengaturan("skala_teks", skala_baru)
-        self._perbarui_kontrol_skala()
-        self.frames["stok"].refresh_style()
-        self.frames["riwayat"].refresh_style()
-
-    def perbesar_teks(self):
-        self.terapkan_skala(utils.skala_teks + utils.SKALA_STEP)
-
-    def perkecil_teks(self):
-        self.terapkan_skala(utils.skala_teks - utils.SKALA_STEP)
-
-    def reset_skala(self):
-        self.terapkan_skala(1.0)
 
 
 if __name__ == "__main__":

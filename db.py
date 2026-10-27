@@ -118,6 +118,24 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    # --- BUAT TABEL PENGGUNA (LOGIN) ---
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            pin TEXT NOT NULL,
+            role TEXT NOT NULL
+        )
+    """)
+    
+    # Masukkan akun default (jika tabel masih kosong)
+    # Bos/Admin: username 'admin', PIN '1234'
+    # Kasir: username 'kasir', PIN '0000'
+    cur.execute("SELECT COUNT(*) FROM users")
+    if cur.fetchone()[0] == 0:
+        cur.execute("INSERT INTO users (username, pin, role) VALUES ('admin', '1234', 'admin')")
+        cur.execute("INSERT INTO users (username, pin, role) VALUES ('kasir', '0000', 'kasir')")
+
     conn.commit()
 
 
@@ -358,6 +376,45 @@ def get_detail_transaksi(transaksi_id):
     ).fetchall()
     return [dict(r) for r in rows]
 
+def batalkan_transaksi(transaksi_id):
+    """
+    Menghapus transaksi, mengembalikan stok, dan mencatatnya di riwayat stok.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    
+    try:
+        # 1. Ambil detail barang dari transaksi yang akan dibatalkan
+        items = cur.execute(
+            "SELECT produk_id, jumlah, harga_beli FROM transaksi_detail WHERE transaksi_id = ?", 
+            (transaksi_id,)
+        ).fetchall()
+        
+        tanggal_sekarang = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 2. Kembalikan stok dan catat riwayat pengembaliannya
+        for item in items:
+            # Kembalikan stok barang ke rak
+            cur.execute(
+                "UPDATE produk SET stok = stok + ? WHERE id = ?", 
+                (item["jumlah"], item["produk_id"])
+            )
+            
+            # Catat di riwayat masuk agar ayahmu tahu ini barang retur
+            cur.execute(
+                "INSERT INTO riwayat_stok (produk_id, tanggal, jumlah, harga_beli, keterangan) VALUES (?, ?, ?, ?, ?)",
+                (item["produk_id"], tanggal_sekarang, item["jumlah"], item["harga_beli"], "Retur Pembeli")
+            )
+
+        # 3. Hapus catatannya dari laporan omzet/transaksi
+        cur.execute("DELETE FROM transaksi_detail WHERE transaksi_id = ?", (transaksi_id,))
+        cur.execute("DELETE FROM transaksi WHERE id = ?", (transaksi_id,))
+        
+        conn.commit()
+    except Exception as e:
+        conn.rollback() # Batalkan semua perubahan jika terjadi error
+        raise e
+
 
 def get_total_penjualan_hari_ini():
     conn = get_connection()
@@ -385,6 +442,11 @@ def set_pengaturan(kunci, nilai):
         (kunci, str(nilai)),
     )
     conn.commit()
+
+def verifikasi_login(username, pin):
+    conn = get_connection()
+    user = conn.execute("SELECT role FROM users WHERE username = ? AND pin = ?", (username, pin)).fetchone()
+    return user["role"] if user else None
 
 def get_id_produk_terjual_terakhir(hari=30):
     """

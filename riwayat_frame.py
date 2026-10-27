@@ -27,6 +27,9 @@ class RiwayatFrame(ctk.CTkFrame):
                       
         ctk.CTkButton(top, text="🔄 Refresh", width=100, command=self.refresh).pack(side="right", padx=(10, 0))
 
+        ctk.CTkButton(top, text="❌ Batalkan (Retur)", fg_color="#C0392B", hover_color="#922B21",
+                      command=self.batalkan_terpilih).pack(side="right", padx=(10, 0))
+
         self.filter_waktu_var = ctk.StringVar(value="Hari Ini")
         self.filter_waktu_combo = ctk.CTkComboBox(
             top, values=["Hari Ini", "7 Hari Terakhir", "Bulan Ini", "Semua Waktu"], 
@@ -136,6 +139,28 @@ class RiwayatFrame(ctk.CTkFrame):
                 )
         self.detail_box.configure(state="disabled")
 
+    def batalkan_terpilih(self):
+        sel = self.tree.selection()
+        if not sel:
+            messagebox.showwarning("Pilih Transaksi", "Silakan klik/pilih salah satu transaksi di tabel terlebih dahulu!")
+            return
+            
+        trans_id = int(sel[0])
+        
+        # Keamanan UX: Minta konfirmasi sebelum menghapus
+        konfirmasi = messagebox.askyesno(
+            "Konfirmasi Retur", 
+            "Yakin ingin membatalkan transaksi ini?\n\n- Uang omzet & profit akan otomatis dikurangi.\n- Stok barang akan dikembalikan utuh ke toko."
+        )
+        
+        if konfirmasi:
+            try:
+                db.batalkan_transaksi(trans_id)
+                messagebox.showinfo("Berhasil", "Transaksi dibatalkan. Stok barang telah dikembalikan ke sistem.")
+                self.refresh() # Segarkan layar agar transaksinya hilang dan omzet berkurang
+            except Exception as e:
+                messagebox.showerror("Error", f"Gagal membatalkan transaksi:\n{str(e)}")
+    
     def export_csv(self):
         filepath = filedialog.asksaveasfilename(
             defaultextension=".csv",
